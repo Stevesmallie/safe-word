@@ -1,0 +1,1019 @@
+<title>Safe Word Screens</title>
+<meta name="description" content="Safe Word app screens: the design system and every screen, built in code.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* ==========================================================================
+   SAFE WORD — DESIGN SYSTEM
+   Layout concept: a dark site-morning app. Real photos up top, the paperwork
+   as a white sheet of paper, hi-vis yellow only for the one thing to tap next.
+   ========================================================================== */
+:root{
+  color-scheme: dark;
+  /* colour */
+  --bg:#0B0F14;          /* app background, graphite */
+  --s1:#121820;          /* raised surface */
+  --s2:#1A222D;          /* card / input */
+  --s3:#232D3A;          /* pressed / border-strong */
+  --line:rgba(214,228,240,.09);
+  --text:#F2F5F8;
+  --muted:#9AA6B2;
+  --faint:#66727F;
+  --hv:#E3FF00;          /* hi-vis: primary action only */
+  --hv-ink:#0B0F14;      /* text on hi-vis */
+  --hv-soft:rgba(227,255,0,.14);
+  --blue:#4D8BFF;        /* links, info */
+  --amber:#FFB020;       /* needs attention */
+  --amber-soft:rgba(255,176,32,.12);
+  --green:#3DDC84;       /* signed / done */
+  --green-soft:rgba(61,220,132,.12);
+  --paper:#FAFAF6;       /* the SWMS sheet */
+  --paper-ink:#161C24;
+  --paper-mute:#6B7480;
+  --paper-line:#DCDfE3;
+  --sig-ink:#1E2F7A;     /* pen ink on paper */
+  --mark:rgba(227,255,0,.55); /* highlighter on paper */
+  /* type */
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  /* shape + motion */
+  --r-sm:10px; --r-md:16px; --r-lg:24px;
+  --tap:56px;
+  --ease:cubic-bezier(.2,.7,.2,1);
+  --t:260ms;
+}
+
+/* ---------- base ---------- */
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:400 17px/1.45 var(--f-body);-webkit-font-smoothing:antialiased;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--hv);outline-offset:3px;border-radius:12px}
+a{color:var(--blue)}
+img{max-width:100%;display:block}
+svg{display:block}
+.ico{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- type scale ---------- */
+.display{font-family:var(--f-display);font-weight:800;text-transform:uppercase;letter-spacing:.005em;line-height:.92;margin:0;text-wrap:balance}
+.d-xl{font-size:clamp(58px,17vw,76px)}
+.d-lg{font-size:44px}
+.d-md{font-size:32px;line-height:.95}
+.d-sm{font-size:24px;line-height:1}
+.eyebrow{font:600 13px/1.2 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
+.label{font:700 13px/1.2 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0}
+.lede{font-size:18px;color:#D4DBE2;margin:0;max-width:34ch}
+.muted{color:var(--muted)}
+.fine{font-size:14px;color:var(--muted);margin:0;line-height:1.45}
+.hv{color:var(--hv)}
+.num{font-variant-numeric:tabular-nums}
+
+/* ---------- app frame ---------- */
+.app{position:relative;height:100%;width:100%;max-width:440px;margin:0 auto;overflow:hidden;background:var(--bg);isolation:isolate}
+@media (min-width:640px){
+  body{display:grid;place-items:center;background:#05080B}
+  .app{height:min(100%,920px);border-radius:32px;box-shadow:0 0 0 1px var(--line),0 50px 140px rgba(0,0,0,.65)}
+}
+/* subtle film grain over everything, so dark surfaces never look flat-digital */
+.app::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:90;opacity:.06;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg);isolation:isolate;
+  opacity:0;visibility:hidden;transform:translateX(28px);
+  transition:opacity var(--t) var(--ease),transform var(--t) var(--ease),visibility 0s linear var(--t)}
+.screen.on{opacity:1;visibility:visible;transform:none;transition:opacity var(--t) var(--ease),transform var(--t) var(--ease)}
+.screen.back-out{transform:translateX(-28px)}
+.scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.pad-x{padding-left:20px;padding-right:20px}
+
+/* ---------- HI-VIS TAPE (signature brand detail) ----------
+   Used in exactly three places: top of every screen, section divider,
+   top edge of confirmation cards. Never on buttons, never vertical. */
+.tape{position:relative;height:14px;flex:none;overflow:hidden;
+  background:linear-gradient(180deg,#F0FF4D 0,var(--hv) 30%,#CFE800 100%)}
+.tape::before{content:"";position:absolute;left:0;right:0;top:32%;height:36%;
+  background:
+    repeating-linear-gradient(60deg,rgba(255,255,255,.55) 0 1px,transparent 1px 3px),
+    repeating-linear-gradient(-60deg,rgba(0,0,0,.18) 0 1px,transparent 1px 3px),
+    linear-gradient(180deg,#E9EDF0,#A9B1B8 50%,#D7DCE0);
+  box-shadow:0 0 0 .5px rgba(0,0,0,.25)}
+.tape::after{content:"";position:absolute;top:0;bottom:0;width:30%;left:-40%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.65),transparent);
+  animation:sheen 5.5s var(--ease) infinite}
+.tape--top{height:10px}
+.tape--div{height:8px;border-radius:2px}
+.tape--card{height:12px}
+@keyframes sheen{0%,62%{left:-40%}100%{left:120%}}
+
+/* ---------- buttons ---------- */
+.btn{display:flex;align-items:center;justify-content:center;gap:10px;min-height:var(--tap);padding:0 22px;border-radius:999px;
+  font:700 18px/1 var(--f-body);letter-spacing:.01em;transition:transform 120ms var(--ease),background var(--t),opacity var(--t)}
+.btn:active{transform:scale(.97)}
+.btn--hv{background:var(--hv);color:var(--hv-ink);box-shadow:0 10px 30px -10px rgba(227,255,0,.55)}
+.btn--hv[disabled]{background:var(--s3);color:var(--faint);box-shadow:none;cursor:default}
+.btn--ghost{background:var(--s2);color:var(--text);box-shadow:inset 0 0 0 1px var(--line)}
+.btn--text{min-height:44px;padding:0 6px;color:var(--muted);font-weight:600}
+.btn--block{width:100%}
+.btn--sm{min-height:44px;padding:0 16px;font-size:16px}
+.iconbtn{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:var(--s2);box-shadow:inset 0 0 0 1px var(--line);flex:none}
+
+/* ---------- top bar ---------- */
+.bar{display:flex;align-items:center;gap:12px;padding:14px 16px 10px;flex:none}
+.bar-title{flex:1;min-width:0}
+.bar-title .eyebrow{font-size:11px}
+.bar-title h1{font:800 22px/1 var(--f-display);text-transform:uppercase;margin:3px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.saved{display:flex;align-items:center;gap:6px;font:600 12px/1 var(--f-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.saved i{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
+
+/* ---------- chips ---------- */
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;border-radius:999px;background:var(--s2);box-shadow:inset 0 0 0 1px var(--line);font:600 15px/1 var(--f-body);white-space:nowrap}
+.status{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font:600 12px/1 var(--f-mono);letter-spacing:.04em;text-transform:uppercase}
+.status--sent{background:var(--green-soft);color:var(--green)}
+.status--signed{background:rgba(77,139,255,.14);color:var(--blue)}
+.status--draft{background:var(--amber-soft);color:var(--amber)}
+
+/* ---------- mic ---------- */
+.mic{position:relative;width:96px;height:96px;border-radius:50%;background:var(--hv);color:var(--hv-ink);display:grid;place-items:center;flex:none;
+  box-shadow:0 0 0 8px rgba(227,255,0,.08),0 0 0 18px rgba(227,255,0,.04),0 18px 50px -8px rgba(227,255,0,.55);transition:transform 160ms var(--ease)}
+.mic .ico{width:38px;height:38px;stroke-width:2.2}
+.mic:active{transform:scale(.95)}
+.mic::before,.mic::after{content:"";position:absolute;inset:-2px;border-radius:50%;border:2px solid var(--hv);opacity:0;pointer-events:none}
+.mic.listening::before{animation:ring 1.6s var(--ease) infinite}
+.mic.listening::after{animation:ring 1.6s var(--ease) .8s infinite}
+@keyframes ring{0%{transform:scale(1);opacity:.55}100%{transform:scale(1.75);opacity:0}}
+.mic--md{width:76px;height:76px}
+.mic--md .ico{width:32px;height:32px}
+.wave{display:flex;align-items:center;gap:3px;height:22px}
+.wave b{width:3px;border-radius:2px;background:currentColor;height:30%;transition:height 90ms linear}
+
+/* ---------- sheets ---------- */
+.scrim{position:absolute;inset:0;background:rgba(3,6,9,.6);opacity:0;visibility:hidden;transition:opacity var(--t),visibility 0s linear var(--t);z-index:40}
+.scrim.on{opacity:1;visibility:visible;transition:opacity var(--t)}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:41;background:var(--s1);border-radius:28px 28px 0 0;
+  padding:10px 20px calc(22px + env(safe-area-inset-bottom,0px));box-shadow:0 -1px 0 var(--line),0 -30px 80px rgba(0,0,0,.5);
+  transform:translateY(105%);transition:transform 340ms var(--ease);display:flex;flex-direction:column;gap:14px;max-height:92%;overflow-y:auto}
+.sheet.on{transform:none}
+.grab{width:44px;height:5px;border-radius:3px;background:var(--s3);margin:2px auto 6px}
+
+/* ---------- signature pad ---------- */
+.sigpad{position:relative;height:170px;border-radius:var(--r-md);background:var(--s2);box-shadow:inset 0 0 0 1px var(--line);touch-action:none;overflow:hidden}
+.sigpad canvas{position:absolute;inset:0;width:100%;height:100%}
+.sigpad .base{position:absolute;left:22px;right:22px;bottom:42px;border-top:1.5px dashed rgba(214,228,240,.25);pointer-events:none}
+.sigpad .base::before{content:"✕";position:absolute;left:-2px;top:-24px;font-size:16px;color:var(--faint)}
+.sigpad .hint{position:absolute;inset:0;display:grid;place-items:center;font:700 22px/1 var(--f-display);text-transform:uppercase;letter-spacing:.06em;color:var(--faint);pointer-events:none;transition:opacity var(--t)}
+.sigpad.inked .hint{opacity:0}
+.sigpad .clear{position:absolute;right:10px;top:10px;min-height:36px;padding:0 12px;border-radius:999px;background:var(--s3);font-size:14px;font-weight:600;opacity:0;pointer-events:none;transition:opacity var(--t)}
+.sigpad.inked .clear{opacity:1;pointer-events:auto}
+
+/* ---------- toast ---------- */
+.toast{position:absolute;left:50%;bottom:calc(110px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);z-index:80;background:#EEF2F5;color:#0B0F14;
+  font-weight:600;font-size:15px;padding:12px 18px;border-radius:999px;opacity:0;transition:all var(--t) var(--ease);pointer-events:none;white-space:nowrap;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* ======================= 0. FIRST RUN ======================= */
+.photo{position:absolute;left:0;right:0;top:0;height:68%;z-index:-1}
+.photo img{width:100%;height:100%;object-fit:cover;object-position:50% 42%}
+.photo::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(11,15,20,.55) 0%,rgba(11,15,20,0) 20%,rgba(11,15,20,0) 55%,rgba(11,15,20,.75) 80%,var(--bg) 100%)}
+.brand{display:flex;align-items:center;gap:10px;padding:16px 20px}
+.brand img{width:34px;height:34px;border-radius:9px;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+.brand span{font:800 20px/1 var(--f-display);letter-spacing:.14em;text-transform:uppercase}
+.welcome-body{margin-top:auto;display:flex;flex-direction:column;gap:18px;padding:0 20px 26px}
+.welcome-body .tape{width:72px;border-radius:2px}
+
+/* ======================= 1. HOME ======================= */
+.home-hero{position:relative;height:320px;flex:none;overflow:hidden}
+.home-hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 62%}
+.home-hero::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(11,15,20,.7) 0%,rgba(11,15,20,.1) 34%,rgba(11,15,20,.25) 60%,var(--bg) 100%)}
+.home-top{position:relative;z-index:1;display:flex;justify-content:space-between;align-items:center;padding:14px 16px}
+.co{display:flex;align-items:center;gap:10px;padding:6px 14px 6px 6px;border-radius:999px;background:rgba(11,15,20,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-weight:600;font-size:15px}
+.co-logo{width:30px;height:30px;border-radius:50%;background:#F2F5F8;color:#0B0F14;display:grid;place-items:center;font:800 12px/1 var(--f-display);letter-spacing:.02em}
+.avatar{width:44px;height:44px;border-radius:50%;background:rgba(11,15,20,.55);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:grid;place-items:center;font:700 16px/1 var(--f-display);letter-spacing:.06em;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+.greet{position:absolute;z-index:1;left:20px;right:20px;bottom:64px}
+.greet .eyebrow{color:#C9D2DA}
+.greet h1{margin-top:8px}
+.startcard{position:relative;z-index:2;margin:-44px 16px 0;padding:18px;border-radius:var(--r-lg);background:linear-gradient(160deg,#1C2531,#131A23);box-shadow:inset 0 0 0 1px var(--line),0 24px 60px -20px rgba(0,0,0,.7);
+  display:flex;align-items:center;gap:18px;width:calc(100% - 32px);text-align:left}
+.startcard .t{flex:1;min-width:0}
+.startcard .t p{margin:6px 0 0}
+.section{padding:26px 20px 0;display:flex;flex-direction:column;gap:12px}
+.section-head{display:flex;justify-content:space-between;align-items:baseline}
+.draft{display:flex;flex-direction:column;gap:12px;padding:16px;border-radius:var(--r-md);background:var(--s1);box-shadow:inset 0 0 0 1px var(--line);text-align:left;width:100%}
+.draft-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.draft h3,.row h3{margin:0;font:700 18px/1.2 var(--f-body)}
+.draft p,.row p{margin:4px 0 0;font-size:15px;color:var(--muted)}
+.meter{height:6px;border-radius:3px;background:var(--s3);overflow:hidden}
+.meter i{display:block;height:100%;border-radius:3px;background:var(--amber)}
+.list{display:flex;flex-direction:column;border-radius:var(--r-md);background:var(--s1);box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
+.row{display:flex;align-items:center;gap:14px;padding:14px 16px;min-height:72px;text-align:left;width:100%}
+.row + .row{box-shadow:inset 0 1px 0 var(--line)}
+.row .t{flex:1;min-width:0}
+.row .t h3{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.doc-ico{width:42px;height:50px;border-radius:6px;background:var(--paper);flex:none;position:relative;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+.doc-ico::before{content:"";position:absolute;left:8px;right:8px;top:10px;height:22px;background:repeating-linear-gradient(180deg,#C9CED4 0 2px,transparent 2px 6px)}
+.doc-ico::after{content:"";position:absolute;left:0;right:0;top:0;height:5px;border-radius:6px 6px 0 0;background:var(--hv)}
+.tabbar{flex:none;display:grid;grid-template-columns:repeat(4,1fr);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px));background:rgba(11,15,20,.92);box-shadow:0 -1px 0 var(--line)}
+.tab{display:flex;flex-direction:column;align-items:center;gap:4px;min-height:58px;justify-content:center;font:600 12px/1 var(--f-body);color:var(--faint)}
+.tab.on{color:var(--text)}
+.tab.on .ico{color:var(--hv)}
+
+/* ======================= 2. CHOOSE ======================= */
+.choose{display:flex;flex-direction:column;gap:12px;padding:6px 20px 28px}
+.form-opt{display:flex;gap:16px;align-items:center;padding:16px;border-radius:var(--r-md);background:var(--s1);box-shadow:inset 0 0 0 1px var(--line);text-align:left;width:100%;transition:box-shadow var(--t)}
+.form-opt:active{box-shadow:inset 0 0 0 2px var(--hv)}
+.form-opt .t{flex:1;min-width:0}
+.form-opt h3{margin:0;font:700 18px/1.2 var(--f-body)}
+.form-opt p{margin:5px 0 0;font-size:15px;color:var(--muted)}
+.form-opt .tag{display:inline-block;margin-top:8px;font:600 11px/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--hv);padding:5px 8px;border-radius:6px;background:var(--hv-soft)}
+.mini{width:62px;height:80px;border-radius:5px;background:var(--paper);flex:none;padding:7px 6px;display:flex;flex-direction:column;gap:4px;box-shadow:0 6px 16px rgba(0,0,0,.4)}
+.mini b{display:block;height:9px;border-radius:2px;background:#1C2532}
+.mini b.co2{background:#0E4E8A}
+.mini i{display:block;height:3px;border-radius:2px;background:#CDD2D8}
+.mini i.s{width:60%}
+.form-opt--dash{background:transparent;box-shadow:inset 0 0 0 1.5px rgba(214,228,240,.18);border-radius:var(--r-md)}
+.form-opt--dash .iconbtn{width:62px;height:62px;border-radius:14px}
+
+/* ======================= 3. TALK ======================= */
+.talk-doc{flex:1;min-height:0;overflow-y:auto;padding:4px 14px 18px;scroll-behavior:smooth;
+  background:radial-gradient(120% 60% at 50% 0%,#18202B 0%,var(--bg) 70%)}
+.paper{background:var(--paper);color:var(--paper-ink);border-radius:6px;padding:16px 16px 18px;box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 30px 60px -30px rgba(0,0,0,.9),0 2px 0 #E4E4DE,0 4px 0 #D6D6CF;font-size:14px;line-height:1.4}
+.paper-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding-bottom:12px;border-bottom:2px solid var(--paper-ink)}
+.logo-br{display:flex;flex-direction:column;line-height:.9;font:800 17px/0.9 var(--f-display);letter-spacing:.04em;color:#0E4E8A;text-transform:uppercase}
+.logo-br small{font:600 9px/1 var(--f-mono);letter-spacing:.14em;color:var(--paper-mute);margin-top:5px}
+.paper-title{text-align:right}
+.paper-title strong{display:block;font:800 15px/1 var(--f-display);letter-spacing:.04em;text-transform:uppercase}
+.paper-title span{display:block;font:500 10px/1.3 var(--f-mono);color:var(--paper-mute);margin-top:4px}
+.fld{display:grid;grid-template-columns:96px 1fr;gap:10px;padding:9px 0;border-bottom:1px solid var(--paper-line);scroll-margin:24px}
+.fld:last-child{border-bottom:0}
+.fld dt{font:600 10px/1.3 var(--f-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--paper-mute);padding-top:2px}
+.fld dd{margin:0;min-height:20px;font-weight:500}
+.fld dd:empty{background:linear-gradient(90deg,#C7CCD2 50%,transparent 0) 0 100%/6px 1.5px repeat-x}
+.fld.next dt{color:var(--paper-ink)}
+.fld.next dd:empty{background-image:linear-gradient(90deg,#0B0F14 50%,transparent 0);animation:blink 1.2s steps(2) infinite}
+@keyframes blink{50%{opacity:.35}}
+.hl{background:linear-gradient(100deg,transparent 0 .2em,var(--mark) .2em calc(100% - .2em),transparent 0) no-repeat 0 0/0% 100%;
+  animation:mark 900ms var(--ease) forwards;padding:0 .1em;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+@keyframes mark{to{background-size:100% 100%}}
+.hl.fade{transition:background-image 1.2s}
+.talk-panel{flex:none;background:var(--s1);border-radius:26px 26px 0 0;box-shadow:0 -1px 0 var(--line),0 -24px 60px rgba(0,0,0,.45);display:flex;flex-direction:column}
+.convo{max-height:178px;overflow-y:auto;padding:16px 18px 6px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+.say{max-width:88%;font-size:16px;line-height:1.38}
+.say--app{display:flex;gap:10px;align-items:flex-start}
+.say--app .who{width:28px;height:28px;border-radius:50%;flex:none;background:var(--s3);display:grid;place-items:center;color:var(--hv)}
+.say--app .who .wave{height:12px;gap:2px}
+.say--app .who .wave b{width:2px}
+.say--app p{margin:3px 0 0}
+.say--me{align-self:flex-end;background:var(--s2);padding:10px 14px;border-radius:18px 18px 4px 18px;color:#DCE3EA}
+.say--me .live{color:var(--muted)}
+.say-cta{align-self:flex-start;margin-left:38px}
+.dock{padding:8px 16px calc(14px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;align-items:center;gap:12px}
+.cmds{display:flex;gap:8px;overflow-x:auto;width:100%;padding:2px 2px 4px;scrollbar-width:none}
+.cmds::-webkit-scrollbar{display:none}
+.mic-row{display:flex;align-items:center;justify-content:space-between;width:100%}
+.mic-row .side{width:92px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;font-weight:600;color:var(--muted)}
+.mic-state{font:700 14px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);height:16px}
+.typebox{display:none;gap:10px;width:100%}
+.typebox input{flex:1;min-width:0;height:var(--tap);border-radius:999px;border:0;background:var(--s2);color:var(--text);padding:0 20px;font:500 17px var(--f-body);box-shadow:inset 0 0 0 1px var(--line)}
+.dock.typing .typebox{display:flex}
+.dock.typing .mic-row{display:none}
+
+/* ======================= 4. HAZARDS ======================= */
+.page-head{padding:6px 20px 16px;display:flex;flex-direction:column;gap:8px}
+.hrcw{margin:0 20px;border-radius:var(--r-md);overflow:hidden;background:var(--s1);box-shadow:inset 0 0 0 1px var(--line)}
+.hrcw div{padding:14px 16px;display:flex;gap:12px;align-items:center}
+.hrcw strong{display:block;font-size:17px}
+.hrcw small{display:block;color:var(--muted);font-size:14px;margin-top:2px}
+.hz-list{display:flex;flex-direction:column;gap:12px;padding:16px 20px 24px}
+.hz{border-radius:var(--r-md);background:var(--s1);box-shadow:inset 0 0 0 1px var(--line);padding:16px;display:flex;flex-direction:column;gap:12px}
+.hz-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.hz h3{margin:0;font:700 18px/1.25 var(--f-body)}
+.risk{flex:none;font:600 11px/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;padding:6px 8px;border-radius:6px;background:rgba(255,92,92,.14);color:#FF7A7A}
+.risk--m{background:var(--amber-soft);color:var(--amber)}
+.ctrl{display:grid;grid-template-columns:22px 1fr;gap:10px;font-size:16px;line-height:1.4;color:#D7DEE5}
+.ctrl .ico{width:20px;height:20px;color:var(--green);margin-top:2px}
+.ctrl em{display:block;font:600 11px/1 var(--f-mono);font-style:normal;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.hz--amber{background:linear-gradient(180deg,rgba(255,176,32,.10),rgba(255,176,32,.03));box-shadow:inset 0 0 0 1.5px rgba(255,176,32,.45)}
+.hz--amber .label{color:var(--amber)}
+.hz--amber p{margin:0;color:#E6DCC8;font-size:16px}
+.hz-actions{display:flex;gap:10px;flex-wrap:wrap}
+.hz.new{animation:settle 500ms var(--ease)}
+@keyframes settle{from{transform:translateY(10px);opacity:0}}
+.foot{flex:none;padding:12px 20px calc(16px + env(safe-area-inset-bottom,0px));background:linear-gradient(180deg,rgba(11,15,20,0),var(--bg) 30%)}
+
+/* ======================= 5. READ-OVER ======================= */
+.ro-head{display:flex;gap:16px;align-items:center;padding:8px 20px 20px}
+.ring{position:relative;width:84px;height:84px;flex:none}
+.ring svg{width:84px;height:84px;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:7}
+.ring .bg{stroke:var(--s3)}
+.ring .fg{stroke:var(--hv);stroke-linecap:round;transition:stroke-dashoffset 700ms var(--ease)}
+.ring span{position:absolute;inset:0;display:grid;place-items:center;font:800 24px/1 var(--f-display)}
+.ring span small{display:block;font:600 10px/1 var(--f-mono);color:var(--muted);text-align:center;margin-top:2px}
+.ro-items{display:flex;flex-direction:column;gap:12px;padding:0 20px 24px}
+.ro{border-radius:var(--r-md);background:var(--s1);box-shadow:inset 0 0 0 1px var(--line);padding:16px;display:flex;flex-direction:column;gap:12px;transition:box-shadow var(--t),opacity var(--t)}
+.ro h3{margin:0;font:700 18px/1.25 var(--f-body)}
+.ro > p{margin:0;color:var(--muted);font-size:16px}
+.suggest{border-radius:12px;background:var(--s2);padding:12px 14px;font-size:16px;line-height:1.4;color:#E3E9EE;position:relative}
+.suggest em{display:block;font:600 11px/1 var(--f-mono);font-style:normal;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.ro-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ro.done{box-shadow:inset 0 0 0 1.5px rgba(61,220,132,.45)}
+.ro.kept{opacity:.62}
+.ro .result{display:none;align-items:center;gap:8px;font-weight:600;font-size:15px}
+.ro.done .result,.ro.kept .result{display:flex}
+.ro.done .result{color:var(--green)}
+.ro.kept .result{color:var(--muted)}
+.ro.done .ro-actions,.ro.kept .ro-actions{display:none}
+.ro-ok{display:flex;gap:12px;align-items:center;padding:14px 16px;border-radius:var(--r-md);background:var(--s1);box-shadow:inset 0 0 0 1px var(--line);color:var(--muted);font-size:16px}
+.ro-ok .ico{color:var(--green);flex:none}
+
+/* ======================= 6. SIGN ======================= */
+.sign-doc{padding:0 14px 22px}
+.paper .sec{font:800 13px/1 var(--f-display);letter-spacing:.08em;text-transform:uppercase;padding:14px 0 8px;border-bottom:2px solid var(--paper-ink)}
+.sgn{display:grid;grid-template-columns:1fr 118px;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--paper-line);min-height:72px}
+.sgn:last-child{border-bottom:0}
+.sgn b{display:block;font-weight:700;font-size:15px}
+.sgn small{display:block;font:500 10px/1.35 var(--f-mono);color:var(--paper-mute);margin-top:3px}
+.sgn .slot{height:54px;border-bottom:1.5px solid #9AA2AC;position:relative;display:grid;place-items:center}
+.sgn .slot canvas{position:absolute;inset:0;width:100%;height:100%}
+.sgn .slot .pp{position:relative;z-index:1;min-height:40px;padding:0 12px;border-radius:999px;background:var(--paper-ink);color:#fff;font:700 13px/1 var(--f-body);display:flex;align-items:center;gap:6px}
+.sgn.signed .slot{border-bottom-color:var(--sig-ink)}
+.stamp{font:600 9.5px/1.3 var(--f-mono);color:var(--sig-ink)}
+.me-card{margin:0 20px 16px;padding:16px;border-radius:var(--r-md);background:var(--s1);box-shadow:inset 0 0 0 1px var(--line);display:flex;flex-direction:column;gap:12px}
+.me-sig{height:76px;border-radius:12px;background:var(--s2);position:relative}
+.me-sig canvas{position:absolute;inset:0;width:100%;height:100%}
+.confirm{margin:0 20px 18px;border-radius:var(--r-md);overflow:hidden;background:var(--s1);box-shadow:inset 0 0 0 1px var(--line);display:none;animation:settle 500ms var(--ease)}
+.confirm.on{display:block}
+.confirm-body{padding:16px;display:flex;gap:14px;align-items:center}
+.tick{width:48px;height:48px;border-radius:50%;background:var(--green-soft);color:var(--green);display:grid;place-items:center;flex:none}
+.confirm h3{margin:0;font:800 26px/1 var(--f-display);text-transform:uppercase}
+.confirm p{margin:4px 0 0;font:500 13px/1.35 var(--f-mono);color:var(--muted)}
+.handover{display:flex;flex-direction:column;gap:6px;text-align:center;align-items:center}
+.handover .bigname{font:800 52px/0.95 var(--f-display);text-transform:uppercase}
+
+/* ======================= 7. SEND ======================= */
+.dest{display:flex;flex-direction:column;gap:10px;padding:0 20px 20px}
+.opt{display:flex;align-items:center;gap:14px;padding:14px 16px;min-height:76px;border-radius:var(--r-md);background:var(--s1);box-shadow:inset 0 0 0 1px var(--line);text-align:left;width:100%;transition:box-shadow var(--t),background var(--t)}
+.opt .oi{width:46px;height:46px;border-radius:14px;background:var(--s2);display:grid;place-items:center;flex:none}
+.opt .t{flex:1;min-width:0}
+.opt h3{margin:0;font:700 18px/1.2 var(--f-body)}
+.opt p{margin:3px 0 0;font-size:15px;color:var(--muted)}
+.check{width:28px;height:28px;border-radius:50%;box-shadow:inset 0 0 0 2px var(--s3);display:grid;place-items:center;flex:none;color:transparent;transition:all var(--t)}
+.check .ico{width:18px;height:18px;stroke-width:3}
+.opt[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--hv);background:linear-gradient(180deg,rgba(227,255,0,.06),transparent)}
+.opt[aria-pressed="true"] .check{background:var(--hv);color:var(--hv-ink);box-shadow:none}
+.attach{margin:0 20px 18px;display:flex;gap:14px;align-items:center;padding:14px;border-radius:var(--r-md);background:var(--s1);box-shadow:inset 0 0 0 1px var(--line)}
+.attach .doc-ico{width:48px;height:60px}
+.attach h3{margin:0;font-size:17px;font-weight:700}
+.attach p{margin:3px 0 0;font:500 12px/1.4 var(--f-mono);color:var(--muted)}
+.done-wrap{position:absolute;inset:0;z-index:30;background:var(--bg);display:flex;flex-direction:column;opacity:0;visibility:hidden;transition:opacity 400ms var(--ease),visibility 0s linear 400ms}
+.done-wrap.on{opacity:1;visibility:visible;transition:opacity 400ms var(--ease)}
+.done-art{flex:1;min-height:0;display:grid;place-items:center;padding:20px}
+.done-art img{width:min(70%,260px);animation:fly 900ms var(--ease) both}
+@keyframes fly{from{transform:translate(-30px,30px) rotate(-6deg);opacity:0}}
+.done-card{margin:0 20px;border-radius:var(--r-md);overflow:hidden;background:var(--s1);box-shadow:inset 0 0 0 1px var(--line)}
+.done-card .b{padding:18px;display:flex;flex-direction:column;gap:6px}
+.done-card h2{margin:0;font:800 34px/0.95 var(--f-display);text-transform:uppercase}
+.done-card p{margin:0;color:var(--muted);font-size:16px}
+.done-card dl{margin:8px 0 0;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font:500 13px/1.35 var(--f-mono)}
+.done-card dt{color:var(--faint)}
+.done-card dd{margin:0;color:#D7DEE5}
+.sending{display:flex;align-items:center;justify-content:center;gap:10px}
+.spin{width:20px;height:20px;border-radius:50%;border:2.5px solid rgba(11,15,20,.25);border-top-color:var(--hv-ink);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- preview-only screen picker (not part of the app) ---------- */
+.pv{position:absolute;z-index:85;top:0;left:0;right:0;height:40px;display:none;align-items:center;justify-content:space-between;padding:0 16px;background:#05080B;box-shadow:0 1px 0 var(--line)}
+.pv-tag{white-space:nowrap;font:600 11px/1 var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.pv-btn{white-space:nowrap;min-height:30px;padding:0 12px;border-radius:999px;background:var(--s2);box-shadow:inset 0 0 0 1px var(--line);font:600 12px/1 var(--f-mono);letter-spacing:.04em;color:#C9D2DA;display:flex;align-items:center;gap:6px}
+.pv-menu{position:absolute;top:38px;right:12px;width:240px;background:#EEF2F5;color:#0B0F14;border-radius:16px;padding:6px;display:none;box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.pv.open .pv-menu{display:block}
+.pv-menu button{display:flex;gap:10px;width:100%;padding:11px 12px;border-radius:10px;font-weight:600;font-size:15px;text-align:left}
+.pv-menu button span{font:600 12px/1.6 var(--f-mono);color:#66727F;width:16px}
+.pv-menu button[aria-current="true"]{background:#0B0F14;color:var(--hv)}
+.pv-menu button[aria-current="true"] span{color:var(--hv)}
+.app.preview .pv{display:flex}
+.app.preview .screen{top:40px}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important;scroll-behavior:auto!important}
+  .tape::after{display:none}
+  .screen{transform:none!important}
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M4.5 12.5l5 5 10-11"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3.5 11L12 4l8.5 7M6 9.5V20h12V9.5"/></symbol>
+  <symbol id="i-jobs" viewBox="0 0 24 24"><rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 3.5v2h6v-2M8.5 11h7M8.5 15h5"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5c1.2-3.8 4-5.5 7.5-5.5s6.3 1.7 7.5 5.5"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M4.5 15v3.5a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V15"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3.5L2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.5 7l8.5 6 8.5-6"/></symbol>
+  <symbol id="i-print" viewBox="0 0 24 24"><path d="M7 9V3.5h10V9M7 17H4.5V10a1 1 0 0 1 1-1h13a1 1 0 0 1 1 1v7H17"/><rect x="7" y="14" width="10" height="6.5"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M4.5 19.5h15"/></symbol>
+  <symbol id="i-kb" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7.5 14h9"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.8v.2"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3L10 14M21 3l-6.5 18-4.5-7-7-4.5z"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20l1-4.5L16 4.5a2.1 2.1 0 0 1 3 3L8 18.5z"/></symbol>
+</svg>
+
+<div class="app" id="app">
+
+  <!-- ===================== 0. FIRST RUN ===================== -->
+  <section class="screen on" data-screen="welcome" aria-label="Welcome">
+    <div class="photo"><img src="assets/first-run-dawn-1290.webp" srcset="assets/first-run-dawn-768.webp 768w, assets/first-run-dawn-1290.webp 1290w" sizes="(min-width:640px) 440px, 100vw" alt="A builder in hi-vis checking his phone at dawn on a house frame site"></div>
+    <div class="tape tape--top"></div>
+    <div class="brand"><img src="assets/icon-192.png" alt=""><span>Safe Word</span></div>
+    <div class="welcome-body">
+      <div class="tape tape--div"></div>
+      <h1 class="display d-xl">Talk it.<br>Sign it.<br><span class="hv">Send it.</span></h1>
+      <p class="lede">Say what the job is. Your SWMS gets written up properly while you talk. You check it, sign it, send it.</p>
+      <button class="btn btn--hv btn--block" data-act="open-sign">Get started</button>
+      <p class="fine" style="text-align:center">Built for Australian sites. About a minute to set up.</p>
+    </div>
+    <div class="scrim" data-act="close-sheet"></div>
+    <div class="sheet" id="sheetSign" role="dialog" aria-label="Save your signature">
+      <div class="grab"></div>
+      <h2 class="display d-md">One signature.<br>Just once.</h2>
+      <p class="fine" style="font-size:16px">It stays on your phone. It only goes on paperwork when you tap to sign.</p>
+      <div class="sigpad" id="padWelcome"><canvas></canvas><div class="base"></div><div class="hint">Sign here</div><button class="clear" type="button">Clear</button></div>
+      <p class="fine">Signing also means you're happy with our <a href="#terms" data-act="terms">terms</a>. Short version: you run the job and your paperwork, we help write it up. You won't be asked again.</p>
+      <button class="btn btn--hv btn--block" id="welcomeGo" disabled data-act="save-sig">Sign and get started</button>
+    </div>
+  </section>
+
+  <!-- ===================== 1. HOME ===================== -->
+  <section class="screen" data-screen="home" aria-label="Home">
+    <div class="scroll">
+      <header class="home-hero">
+        <img src="assets/home-hands-1290.webp" srcset="assets/home-hands-768.webp 768w, assets/home-hands-1290.webp 1290w" sizes="(min-width:640px) 440px, 100vw" alt="Gloved hands holding a phone beside a fresh concrete slab">
+        <div class="tape tape--top" style="position:relative;z-index:1"></div>
+        <div class="home-top">
+          <div class="co"><span class="co-logo">BR</span>Brown Roofing</div>
+          <button class="avatar" aria-label="Your account">DB</button>
+        </div>
+        <div class="greet">
+          <p class="eyebrow num" id="today">Sun 25 Oct · 6:04am</p>
+          <h1 class="display d-lg">Morning, Dave.</h1>
+        </div>
+      </header>
+      <button class="startcard" data-go="choose">
+        <span class="mic mic--md" aria-hidden="true"><svg class="ico"><use href="#i-mic"/></svg></span>
+        <span class="t"><span class="display d-sm" style="display:block">Start a SWMS</span><p class="muted">Tap and talk, or type it.</p></span>
+        <svg class="ico" style="color:var(--muted)"><use href="#i-chev"/></svg>
+      </button>
+
+      <div class="section">
+        <div class="section-head"><h2 class="label">Pick up where you left off</h2></div>
+        <button class="draft" data-go="talk">
+          <div class="draft-top">
+            <div><h3>Gutter and fascia replacement</h3><p>22 Parkyn Pde, Mooloolaba</p></div>
+            <span class="status status--draft">Draft</span>
+          </div>
+          <div class="meter"><i style="width:69%"></i></div>
+          <p class="fine num">11 of 16 filled · last touched yesterday 3:40pm</p>
+        </button>
+      </div>
+
+      <div class="section" style="padding-bottom:28px">
+        <div class="tape tape--div"></div>
+        <div class="section-head" style="margin-top:8px"><h2 class="label">Recent</h2><button class="btn--text" style="font-size:15px;color:var(--blue)">See all</button></div>
+        <div class="list">
+          <button class="row"><span class="doc-ico"></span><span class="t"><h3>Skylight install</h3><p>3 Kings Rd, Buderim · Thu</p></span><span class="status status--sent">Sent</span></button>
+          <button class="row"><span class="doc-ico"></span><span class="t"><h3>Re-roof, two storey</h3><p>8 Brisbane Rd, Alexandra Hdl · Tue</p></span><span class="status status--signed">Signed</span></button>
+          <button class="row"><span class="doc-ico"></span><span class="t"><h3>Whirlybird and flashing</h3><p>41 Coral St, Maroochydore · 14 Oct</p></span><span class="status status--sent">Sent</span></button>
+        </div>
+      </div>
+    </div>
+    <nav class="tabbar" aria-label="Main">
+      <button class="tab on" aria-current="page"><svg class="ico"><use href="#i-home"/></svg>Home</button>
+      <button class="tab" data-act="soon"><svg class="ico"><use href="#i-jobs"/></svg>Jobs</button>
+      <button class="tab" data-act="soon"><svg class="ico"><use href="#i-folder"/></svg>Paperwork</button>
+      <button class="tab" data-act="soon"><svg class="ico"><use href="#i-user"/></svg>Me</button>
+    </nav>
+  </section>
+
+  <!-- ===================== 2. CHOOSE PAPERWORK ===================== -->
+  <section class="screen" data-screen="choose" aria-label="Choose paperwork">
+    <div class="tape tape--top"></div>
+    <div class="bar"><button class="iconbtn" data-back aria-label="Back"><svg class="ico"><use href="#i-back"/></svg></button></div>
+    <div class="scroll">
+      <div class="page-head"><p class="eyebrow">New SWMS</p><h1 class="display d-lg">Which paperwork?</h1></div>
+      <div class="choose">
+        <button class="form-opt" data-go="talk">
+          <span class="mini"><b class="co2" style="width:55%"></b><i></i><i class="s"></i><i></i><i></i><i class="s"></i><i></i></span>
+          <span class="t"><h3>Safe Word SWMS</h3><p>Our standard form with the Brown Roofing logo on it.</p><span class="tag">You use this most</span></span>
+        </button>
+        <button class="form-opt" data-go="talk">
+          <span class="mini"><b style="width:80%"></b><i></i><i></i><i class="s"></i><i></i><i></i><i class="s"></i></span>
+          <span class="t"><h3>Coastline Builders SWMS</h3><p>The builder's own form. We fill it in for you.</p></span>
+        </button>
+        <button class="form-opt" data-go="talk">
+          <span class="iconbtn" style="width:62px;height:62px;border-radius:14px"><svg class="ico"><use href="#i-copy"/></svg></span>
+          <span class="t"><h3>Copy an old one</h3><p>Start from Skylight install and change what's different.</p></span>
+        </button>
+        <button class="form-opt form-opt--dash" data-act="soon">
+          <span class="iconbtn"><svg class="ico"><use href="#i-upload"/></svg></span>
+          <span class="t"><h3>Add other paperwork</h3><p>Photo, PDF or Word file. It's saved for next time.</p></span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 3. TALK ===================== -->
+  <section class="screen" data-screen="talk" aria-label="Talk it through">
+    <div class="tape tape--top"></div>
+    <div class="bar">
+      <button class="iconbtn" data-back aria-label="Back"><svg class="ico"><use href="#i-back"/></svg></button>
+      <div class="bar-title"><p class="eyebrow">Safe Word SWMS</p><h1 id="jobTitle">New job</h1></div>
+      <span class="saved"><i></i>Saved</span>
+    </div>
+    <div class="talk-doc" id="talkDoc">
+      <article class="paper" aria-label="SWMS document">
+        <div class="paper-head">
+          <div class="logo-br">Brown<br>Roofing<small>Est. 2009</small></div>
+          <div class="paper-title"><strong>Safe Work Method Statement</strong><span class="num">BR-0143 · Prepared 25/10/2026</span></div>
+        </div>
+        <dl style="margin:0">
+          <div class="fld"><dt>Business</dt><dd>Brown Roofing · 0412 555 018</dd></div>
+          <div class="fld" id="f-site"><dt>Site address</dt><dd></dd></div>
+          <div class="fld" id="f-work"><dt>Work</dt><dd></dd></div>
+          <div class="fld" id="f-hrcw"><dt>High-risk work</dt><dd></dd></div>
+          <div class="fld" id="f-pc"><dt>Principal contractor</dt><dd></dd></div>
+          <div class="fld" id="f-resp"><dt>Person responsible</dt><dd></dd></div>
+          <div class="fld"><dt>Hazards &amp; controls</dt><dd style="color:var(--paper-mute);font-size:13px">Next, from what you say</dd></div>
+        </dl>
+      </article>
+    </div>
+    <div class="talk-panel">
+      <div class="convo" id="convo" aria-live="polite"></div>
+      <div class="dock" id="dock">
+        <div class="cmds" id="cmds">
+          <button class="chip" data-cmd="thatsall">That's all</button>
+          <button class="chip" data-cmd="readback">Read it back</button>
+          <button class="chip" data-cmd="skip">Skip this one</button>
+          <button class="chip" data-cmd="info"><svg class="ico" style="width:18px;height:18px"><use href="#i-info"/></svg>What goes here?</button>
+        </div>
+        <div class="mic-row">
+          <button class="side" data-cmd="type" aria-label="Type instead"><span class="iconbtn"><svg class="ico"><use href="#i-kb"/></svg></span>Type</button>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+            <button class="mic" id="talkMic" aria-label="Tap to talk"><svg class="ico"><use href="#i-mic"/></svg></button>
+            <span class="mic-state" id="micState">Tap to talk</span>
+          </div>
+          <button class="side" data-go="hazards" aria-label="Go to hazards"><span class="iconbtn"><svg class="ico"><use href="#i-alert"/></svg></span>Hazards</button>
+        </div>
+        <form class="typebox" id="typebox"><input id="typeIn" autocomplete="off" placeholder="Type it how you'd say it"><button class="iconbtn" style="background:var(--hv);color:var(--hv-ink);box-shadow:none;width:56px;height:56px" aria-label="Add"><svg class="ico"><use href="#i-send"/></svg></button></form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 4. HAZARDS ===================== -->
+  <section class="screen" data-screen="hazards" aria-label="Hazards and controls">
+    <div class="tape tape--top"></div>
+    <div class="bar">
+      <button class="iconbtn" data-back aria-label="Back"><svg class="ico"><use href="#i-back"/></svg></button>
+      <div class="bar-title"><p class="eyebrow">Roof sheet replacement</p><h1>Hazards &amp; controls</h1></div>
+      <span class="saved"><i></i>Saved</span>
+    </div>
+    <div class="scroll">
+      <div class="page-head"><p class="lede" style="font-size:17px">Pulled from what you said. Tap any line to change it.</p></div>
+      <div class="hrcw"><div class="tape tape--card"></div><div><span class="iconbtn" style="color:var(--hv)"><svg class="ico"><use href="#i-alert"/></svg></span><span><strong>High-risk construction work</strong><small>Risk of a person falling more than 2 m</small></span></div></div>
+      <div class="hz-list" id="hzList">
+        <div class="hz">
+          <div class="hz-top"><h3>Falling from the roof edge</h3><span class="risk">High</span></div>
+          <div class="ctrl"><svg class="ico"><use href="#i-check"/></svg><span><em>Engineering</em>Perimeter scaffold with guardrails, mid-rails and toe boards, put up and tagged by a licensed scaffolder.</span></div>
+          <div class="ctrl"><svg class="ico"><use href="#i-check"/></svg><span><em>Admin</em>Scaffold tag checked before work starts each day.</span></div>
+        </div>
+        <div class="hz">
+          <div class="hz-top"><h3>Falling through the roof</h3><span class="risk">High</span></div>
+          <div class="ctrl"><svg class="ico"><use href="#i-check"/></svg><span><em>Engineering</em>Safety mesh checked and left in place under the sheets.</span></div>
+          <div class="ctrl"><svg class="ico"><use href="#i-check"/></svg><span><em>Admin</em>Old sheets come off one bay at a time. Walk on purlin lines only.</span></div>
+        </div>
+        <div class="hz">
+          <div class="hz-top"><h3>Sheets catching the wind</h3><span class="risk risk--m">Medium</span></div>
+          <div class="ctrl"><svg class="ico"><use href="#i-check"/></svg><span><em>Admin</em>Sheets strapped down on the roof. Handling stops if the wind makes them hard to hold.</span></div>
+        </div>
+        <div class="hz hz--amber" id="hzAmber">
+          <p class="label" style="display:flex;gap:8px;align-items:center"><svg class="ico" style="width:18px;height:18px"><use href="#i-alert"/></svg>Not covered yet</p>
+          <h3>Overhead power line</h3>
+          <p>You mentioned the street side. If the service line runs to that eave, it's worth a control. Or keep it as is if it's not near the work.</p>
+          <div class="hz-actions"><button class="btn btn--hv btn--sm" data-act="add-power"><svg class="ico" style="width:20px;height:20px"><use href="#i-plus"/></svg>Add a control</button><button class="btn btn--ghost btn--sm" data-act="keep-power">Keep as is</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="foot"><button class="btn btn--hv btn--block" data-go="readover">Read it over</button></div>
+  </section>
+
+  <!-- ===================== 5. READ-OVER ===================== -->
+  <section class="screen" data-screen="readover" aria-label="Read-over">
+    <div class="tape tape--top"></div>
+    <div class="bar">
+      <button class="iconbtn" data-back aria-label="Back"><svg class="ico"><use href="#i-back"/></svg></button>
+      <div class="bar-title"><p class="eyebrow">Roof sheet replacement</p><h1>Read-over</h1></div>
+    </div>
+    <div class="scroll">
+      <div class="ro-head">
+        <div class="ring"><svg viewBox="0 0 84 84"><circle class="bg" cx="42" cy="42" r="36"/><circle class="fg" id="ringFg" cx="42" cy="42" r="36" stroke-dasharray="226.2" stroke-dashoffset="28.3"/></svg><span><span class="num" id="ringNum">14<small>of 16</small></span></span></div>
+        <div><h1 class="display d-md">Had a read through.</h1><p class="muted" style="margin:8px 0 0;font-size:16px">Looks good. Two spots are still blank. Both are quick, or keep it as is.</p></div>
+      </div>
+      <div class="ro-items">
+        <div class="ro" id="ro1">
+          <h3>How the controls get checked</h3>
+          <p>Who checks the scaffold and edge protection, and when?</p>
+          <div class="suggest"><em>Most people say</em>Dave Brown checks the scaffold tag and edge protection at the start of each day.</div>
+          <div class="ro-actions"><button class="btn btn--hv btn--sm" data-ro="ro1" data-v="done">Use that</button><button class="btn btn--ghost btn--sm" data-act="say"><svg class="ico" style="width:20px;height:20px"><use href="#i-mic"/></svg>Say it</button><button class="btn--text" data-ro="ro1" data-v="kept">Keep as is</button></div>
+          <div class="result"><svg class="ico" style="width:20px;height:20px"><use href="#i-check"/></svg><span></span></div>
+        </div>
+        <div class="ro" id="ro2">
+          <h3>When this gets reviewed</h3>
+          <p>When would you look at this again?</p>
+          <div class="suggest"><em>Most people say</em>Reviewed if the work, the weather or the site changes, or after any incident.</div>
+          <div class="ro-actions"><button class="btn btn--hv btn--sm" data-ro="ro2" data-v="done">Use that</button><button class="btn btn--ghost btn--sm" data-act="say"><svg class="ico" style="width:20px;height:20px"><use href="#i-mic"/></svg>Say it</button><button class="btn--text" data-ro="ro2" data-v="kept">Keep as is</button></div>
+          <div class="result"><svg class="ico" style="width:20px;height:20px"><use href="#i-check"/></svg><span></span></div>
+        </div>
+        <div class="ro-ok"><svg class="ico"><use href="#i-check"/></svg><span>Site, work, high-risk work, hazards and the people responsible are all in.</span></div>
+      </div>
+    </div>
+    <div class="foot"><button class="btn btn--hv btn--block" data-go="sign">Sign off</button></div>
+  </section>
+
+  <!-- ===================== 6. SIGN ===================== -->
+  <section class="screen" data-screen="sign" aria-label="Sign off">
+    <div class="tape tape--top"></div>
+    <div class="bar">
+      <button class="iconbtn" data-back aria-label="Back"><svg class="ico"><use href="#i-back"/></svg></button>
+      <div class="bar-title"><p class="eyebrow">Roof sheet replacement</p><h1>Sign off</h1></div>
+    </div>
+    <div class="scroll" id="signScroll">
+      <div class="confirm" id="allSigned">
+        <div class="tape tape--card"></div>
+        <div class="confirm-body"><span class="tick"><svg class="ico"><use href="#i-check"/></svg></span><div><h3>Everyone's signed</h3><p class="num" id="lockLine">3 of 3 · locked to this version</p></div></div>
+      </div>
+      <div class="me-card" id="meCard">
+        <div style="display:flex;justify-content:space-between;align-items:center"><p class="label">Your signature</p><button class="btn--text" style="font-size:15px;color:var(--blue)" data-act="soon">Change</button></div>
+        <div class="me-sig"><canvas id="meSig"></canvas></div>
+        <button class="btn btn--hv btn--block" data-act="sign-me"><svg class="ico"><use href="#i-pen"/></svg>Sign both places</button>
+      </div>
+      <div class="sign-doc">
+        <article class="paper">
+          <div class="sec" style="padding-top:0">Prepared by</div>
+          <div class="sgn" id="s-author"><div><b>Dave Brown</b><small>Supervisor, Brown Roofing</small></div><div class="slot"><canvas></canvas></div></div>
+          <div class="sec">Crew sign-on · I've read and understood this SWMS</div>
+          <div class="sgn" id="s-dave"><div><b>Dave Brown</b><small>Roofer</small></div><div class="slot"><canvas></canvas></div></div>
+          <div class="sgn" id="s-mia"><div><b>Mia Tran</b><small>Roofer</small></div><div class="slot"><canvas></canvas><button class="pp" data-pass="mia"><svg class="ico" style="width:16px;height:16px"><use href="#i-phone"/></svg>Pass phone</button></div></div>
+          <div class="sgn" id="s-jack"><div><b>Jack Wilson</b><small>Apprentice</small></div><div class="slot"><canvas></canvas><button class="pp" data-pass="jack"><svg class="ico" style="width:16px;height:16px"><use href="#i-phone"/></svg>Pass phone</button></div></div>
+        </article>
+      </div>
+    </div>
+    <div class="foot"><button class="btn btn--hv btn--block" id="toSend" data-go="send" disabled>Send it</button></div>
+    <div class="scrim" data-act="close-sheet"></div>
+    <div class="sheet" id="sheetPass" role="dialog" aria-label="Crew signature">
+      <div class="grab"></div>
+      <div class="handover"><p class="eyebrow">Hand the phone to</p><div class="bigname" id="passName">Mia</div><p class="fine" style="font-size:16px;max-width:30ch">Have a read of the SWMS above. If you're good with it, sign below.</p></div>
+      <div class="sigpad" id="padPass"><canvas></canvas><div class="base"></div><div class="hint">Sign here</div><button class="clear" type="button">Clear</button></div>
+      <button class="btn btn--hv btn--block" id="passGo" disabled data-act="pass-sign">I've read it, sign</button>
+      <button class="btn--text" style="align-self:center" data-act="close-sheet">Not now</button>
+    </div>
+  </section>
+
+  <!-- ===================== 7. SEND ===================== -->
+  <section class="screen" data-screen="send" aria-label="Send">
+    <div class="tape tape--top"></div>
+    <div class="bar">
+      <button class="iconbtn" data-back aria-label="Back"><svg class="ico"><use href="#i-back"/></svg></button>
+      <div class="bar-title"><p class="eyebrow">Roof sheet replacement</p><h1>Send</h1></div>
+    </div>
+    <div class="scroll">
+      <div class="page-head"><h1 class="display d-lg">Where's it going?</h1></div>
+      <div class="attach"><span class="doc-ico"></span><div><h3>SWMS · 14 Ocean St</h3><p class="num">BR-0143.pdf · 3 pages · signed by 3</p></div></div>
+      <div class="dest">
+        <button class="opt" aria-pressed="true" data-opt><span class="oi"><svg class="ico"><use href="#i-mail"/></svg></span><span class="t"><h3>Email Tom Reid</h3><p>Coastline Builders · used last time</p></span><span class="check"><svg class="ico"><use href="#i-check"/></svg></span></button>
+        <button class="opt" aria-pressed="false" data-opt><span class="oi"><svg class="ico"><use href="#i-print"/></svg></span><span class="t"><h3>Print</h3><p>Any AirPrint or Wi-Fi printer</p></span><span class="check"><svg class="ico"><use href="#i-check"/></svg></span></button>
+        <button class="opt" aria-pressed="true" data-opt><span class="oi"><svg class="ico"><use href="#i-down"/></svg></span><span class="t"><h3>Save to phone</h3><p>PDF in your Files</p></span><span class="check"><svg class="ico"><use href="#i-check"/></svg></span></button>
+      </div>
+    </div>
+    <div class="foot"><button class="btn btn--hv btn--block" id="sendBtn" data-act="send"><svg class="ico"><use href="#i-send"/></svg>Send</button></div>
+    <div class="done-wrap" id="doneWrap">
+      <div class="tape tape--top"></div>
+      <div class="done-art"><img src="assets/illus-sent-dark.png" alt=""></div>
+      <div class="done-card">
+        <div class="tape tape--card"></div>
+        <div class="b">
+          <h2>Sent to Tom.</h2>
+          <p>A copy's in Jobs, so it's there if anyone asks.</p>
+          <dl class="num"><dt>To</dt><dd>Tom Reid, Coastline Builders</dd><dt>Also</dt><dd id="alsoLine">Saved to phone</dd><dt>Time</dt><dd id="sentTime">6:24am</dd></dl>
+        </div>
+      </div>
+      <div style="padding:20px 20px calc(18px + env(safe-area-inset-bottom,0px))"><button class="btn btn--ghost btn--block" data-act="restart">Back to home</button></div>
+    </div>
+  </section>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <!-- preview-only: jump between screens. Not part of the app build. -->
+  <div class="pv" id="pv">
+    <span class="pv-tag">Preview</span>
+    <button class="pv-btn" id="pvBtn" aria-expanded="false"><span id="pvNow">1/8</span> Screens ▾</button>
+    <div class="pv-menu" id="pvMenu"></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const app = $('#app');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const wait = ms => new Promise(r => setTimeout(r, reduce ? Math.min(ms, 60) : ms));
+  app.classList.add('preview');
+
+  /* ---------------- toast ---------------- */
+  let toastT;
+  function toast(msg) {
+    const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+    clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2200);
+  }
+
+  /* ---------------- router ---------------- */
+  const ORDER = ['welcome','home','choose','talk','hazards','readover','sign','send'];
+  const NAMES = {welcome:'First run',home:'Home',choose:'Choose paperwork',talk:'Talk it through',hazards:'Hazards & controls',readover:'Read-over',sign:'Sign off',send:'Send'};
+  let current = 'welcome'; const stack = [];
+  function show(name, {push = true, back = false} = {}) {
+    if (name === current) return;
+    const from = $(`[data-screen="${current}"]`), to = $(`[data-screen="${name}"]`);
+    if (push) stack.push(current);
+    from.classList.remove('on'); from.classList.toggle('back-out', !back);
+    to.classList.remove('back-out');
+    if (back) { to.style.transform = 'translateX(-28px)'; requestAnimationFrame(() => { to.style.transform = ''; }); }
+    to.classList.add('on');
+    current = name; closeSheets();
+    onEnter[name] && onEnter[name]();
+    renderPv();
+  }
+  function goBack() { const p = stack.pop(); if (p) show(p, {push:false, back:true}); }
+
+  /* ---------------- sheets ---------------- */
+  function openSheet(id) {
+    const sh = $('#' + id); const scr = sh.parentElement.querySelector('.scrim');
+    scr.classList.add('on'); sh.classList.add('on');
+    requestAnimationFrame(() => pads[id === 'sheetSign' ? 'welcome' : 'pass'].fit());
+  }
+  function closeSheets() { $$('.sheet.on,.scrim.on').forEach(e => e.classList.remove('on')); }
+
+  /* ---------------- signature pad ---------------- */
+  // Strokes are stored as normalised points (0..1) so one signature can be
+  // redrawn at any size, in any ink: on the pad, on the paper, on the PDF.
+  function makePad(root, onChange) {
+    const cv = $('canvas', root), ctx = cv.getContext('2d');
+    let strokes = [], cur = null, w = 0, h = 0;
+    function fit() {
+      const r = cv.getBoundingClientRect(); if (!r.width) return;
+      const d = devicePixelRatio || 1; w = r.width; h = r.height;
+      cv.width = w * d; cv.height = h * d; ctx.setTransform(d, 0, 0, d, 0, 0); redraw();
+    }
+    function redraw() { ctx.clearRect(0, 0, w, h); drawStrokes(ctx, strokes, w, h, '#F2F5F8', 1); }
+    function pt(e) { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height, performance.now()]; }
+    root.addEventListener('pointerdown', e => { if (e.target.closest('.clear')) return; root.setPointerCapture(e.pointerId); cur = [pt(e)]; strokes.push(cur); });
+    root.addEventListener('pointermove', e => { if (!cur) return; cur.push(pt(e)); redraw(); });
+    const end = () => { if (!cur) return; cur = null; root.classList.toggle('inked', ink() > 0.04); onChange && onChange(ink() > 0.04); };
+    root.addEventListener('pointerup', end); root.addEventListener('pointercancel', end);
+    $('.clear', root).addEventListener('click', () => { strokes = []; redraw(); root.classList.remove('inked'); onChange && onChange(false); });
+    function ink() { let L = 0; strokes.forEach(s => { for (let i = 1; i < s.length; i++) L += Math.hypot(s[i][0] - s[i-1][0], s[i][1] - s[i-1][1]); }); return L; }
+    return { fit, get strokes() { return strokes; }, reset() { strokes = []; root.classList.remove('inked'); redraw(); onChange && onChange(false); } };
+  }
+  // Smooth, speed-weighted ink: slower = thicker, like a real pen.
+  function drawStrokes(ctx, strokes, w, h, color, scale) {
+    ctx.strokeStyle = color; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    strokes.forEach(s => {
+      if (s.length < 2) return;
+      for (let i = 1; i < s.length; i++) {
+        const a = s[i-1], b = s[i], dt = Math.max(1, b[2] - a[2]);
+        const v = Math.hypot((b[0]-a[0]) * w, (b[1]-a[1]) * h) / dt;
+        ctx.lineWidth = Math.max(1.2, Math.min(3.6, 3.6 - v * 1.4)) * scale;
+        const st = i > 1 ? [(s[i-2][0] + a[0]) / 2, (s[i-2][1] + a[1]) / 2] : [a[0], a[1]];
+        const en = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        ctx.beginPath(); ctx.moveTo(st[0] * w, st[1] * h); ctx.quadraticCurveTo(a[0] * w, a[1] * h, en[0] * w, en[1] * h); ctx.stroke();
+        if (i === s.length - 1) { ctx.beginPath(); ctx.moveTo(en[0] * w, en[1] * h); ctx.lineTo(b[0] * w, b[1] * h); ctx.stroke(); }
+      }
+    });
+  }
+  // Fit strokes into a box (keeps aspect), used to place a saved signature on paper.
+  function drawFitted(canvas, strokes, color) {
+    const r = canvas.getBoundingClientRect(); if (!r.width) return;
+    const d = devicePixelRatio || 1, ctx = canvas.getContext('2d');
+    canvas.width = r.width * d; canvas.height = r.height * d; ctx.setTransform(d, 0, 0, d, 0, 0); ctx.clearRect(0, 0, r.width, r.height);
+    const pts = strokes.flat(); if (!pts.length) return;
+    let x0 = 1, y0 = 1, x1 = 0, y1 = 0; pts.forEach(p => { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); });
+    const srcW = (x1 - x0) * 360, srcH = (y1 - y0) * 170, pad = 6;
+    const k = Math.min((r.width - pad * 2) / Math.max(srcW, 1), (r.height - pad * 2) / Math.max(srcH, 1));
+    const ox = (r.width - srcW * k) / 2, oy = (r.height - srcH * k) / 2;
+    const mapped = strokes.map(s => s.map(p => [((p[0] - x0) * 360 * k + ox) / r.width, ((p[1] - y0) * 170 * k + oy) / r.height, p[2]]));
+    drawStrokes(ctx, mapped, r.width, r.height, color, Math.max(.55, Math.min(1, k * 1.1)));
+  }
+  // A believable fallback signature, so screens opened from the picker still look real.
+  function fakeSig(seed) {
+    const s = [], t0 = 0; let x = .12, t = t0; const pts = [];
+    for (let i = 0; i <= 120; i++) {
+      const a = i / 120; x = .1 + a * .78;
+      const y = .55 - Math.sin(a * Math.PI * (5 + seed)) * .16 * (1 - a * .4) - (a < .12 ? (.12 - a) * 1.6 : 0);
+      t += 6 + Math.abs(Math.cos(a * 9)) * 10; pts.push([x + Math.sin(a * 40) * .008, y, t]);
+    }
+    s.push(pts); s.push([[.18, .74, 0], [.5, .7, 90], [.84, .73, 180]]); return s;
+  }
+
+  const sig = { me: null, crew: {} };
+  const pads = {
+    welcome: makePad($('#padWelcome'), ok => $('#welcomeGo').disabled = !ok),
+    pass: makePad($('#padPass'), ok => $('#passGo').disabled = !ok)
+  };
+
+  /* ---------------- talk: scripted sample job ---------------- */
+  const STEPS = [
+    { app: "Morning. What's the job, and where is it?",
+      me: "Re-roofing at 14 Ocean Street Mooloolaba. Single storey, pulling the old tin off and putting new sheets on. Gutter's about three and a half metres up.",
+      title: 'Roof sheet replacement',
+      fill: { 'f-site': '14 Ocean Street, Mooloolaba QLD 4557',
+              'f-work': 'Removal of existing corrugated metal roof sheeting and installation of new sheeting to a single-storey dwelling. Eave height approx. 3.5 m.',
+              'f-hrcw': 'Risk of a person falling more than 2 m' } },
+    { app: "Got it. Who's the builder on this one?",
+      me: "Coastline Builders. Tom Reid's the super.",
+      fill: { 'f-pc': 'Coastline Builders. Site supervisor: Tom Reid' } },
+    { app: "And who's making sure the controls get done?",
+      me: "That's me.",
+      fill: { 'f-resp': 'Dave Brown, Supervisor, Brown Roofing' } },
+  ];
+  let step = 0, busy = false, talkStarted = false;
+  const convo = $('#convo');
+  function sayApp(text) {
+    const el = document.createElement('div'); el.className = 'say say--app';
+    el.innerHTML = `<span class="who"><span class="wave">${'<b></b>'.repeat(4)}</span></span><p></p>`;
+    $('p', el).textContent = text; convo.appendChild(el); convo.scrollTop = convo.scrollHeight;
+    speakWave($('.wave', el), 1400);
+  }
+  function speakWave(w, ms) {
+    const bars = $$('b', w); const end = performance.now() + (reduce ? 0 : ms);
+    (function tick() { const on = performance.now() < end; bars.forEach(b => b.style.height = on ? (25 + Math.random() * 75) + '%' : '35%'); if (on) setTimeout(tick, 90); })();
+  }
+  function nextField() {
+    $$('.fld.next').forEach(f => f.classList.remove('next'));
+    const n = STEPS[step] && Object.keys(STEPS[step].fill)[0];
+    if (n) $('#' + n).classList.add('next');
+  }
+  async function fill(map) {
+    for (const [id, text] of Object.entries(map)) {
+      const f = $('#' + id); const dd = $('dd', f);
+      f.classList.remove('next');
+      dd.innerHTML = '<span class="hl"></span>'; $('.hl', dd).textContent = text;
+      $('#talkDoc').scrollTo({ top: f.offsetTop - 40, behavior: reduce ? 'auto' : 'smooth' });
+      await wait(520);
+    }
+  }
+  async function runStep(text) {
+    if (busy || step >= STEPS.length) return; busy = true;
+    const S = STEPS[step], mic = $('#talkMic'), state = $('#micState');
+    const me = document.createElement('div'); me.className = 'say say--me';
+    convo.appendChild(me);
+    if (text == null) {
+      mic.classList.add('listening'); state.innerHTML = '<span class="wave" style="color:var(--hv)">' + '<b></b>'.repeat(7) + '</span>';
+      speakWave($('.wave', state), 2400);
+      const words = S.me.split(' ');
+      for (let i = 1; i <= words.length; i++) {
+        me.innerHTML = words.slice(0, i).join(' ') + (i < words.length ? ' <span class="live">…</span>' : '');
+        convo.scrollTop = convo.scrollHeight; await wait(70 + Math.random() * 60);
+      }
+      mic.classList.remove('listening');
+    } else { me.textContent = text; convo.scrollTop = convo.scrollHeight; }
+    state.textContent = 'Got it'; await wait(350);
+    if (S.title) $('#jobTitle').textContent = S.title;
+    await fill(S.fill);
+    step++; nextField(); busy = false;
+    if (step < STEPS.length) { state.textContent = 'Tap to talk'; await wait(250); sayApp(STEPS[step].app); }
+    else finishTalk();
+  }
+  function finishTalk() {
+    $('#micState').textContent = 'Details are in';
+    sayApp("That's the details sorted. I've pulled the hazards from what you said. Want a look?");
+    const b = document.createElement('button'); b.className = 'btn btn--hv btn--sm say-cta'; b.textContent = 'See hazards'; b.dataset.go = 'hazards';
+    convo.appendChild(b); convo.scrollTop = convo.scrollHeight;
+  }
+  async function thatsAll() {
+    if (busy) return; busy = true;
+    while (step < STEPS.length) { if (STEPS[step].title) $('#jobTitle').textContent = STEPS[step].title; await fill(STEPS[step].fill); step++; }
+    busy = false; nextField(); finishTalk();
+  }
+  function startTalk() {
+    if (talkStarted) return; talkStarted = true;
+    setTimeout(() => { sayApp(STEPS[0].app); nextField(); }, reduce ? 0 : 380);
+  }
+
+  /* ---------------- sign ---------------- */
+  function hash(str) { let h1 = 0x811c9dc5; for (const c of str) { h1 ^= c.charCodeAt(0); h1 = Math.imul(h1, 16777619); } return (h1 >>> 0).toString(16).toUpperCase().padStart(8, '0'); }
+  function nowStr() { const d = new Date(); let h = d.getHours(), m = String(d.getMinutes()).padStart(2, '0'); const ap = h >= 12 ? 'pm' : 'am'; h = h % 12 || 12; return `${h}:${m}${ap}`; }
+  function putSig(rowId, strokes) {
+    const row = $('#' + rowId); row.classList.add('signed');
+    const pp = $('.pp', row); if (pp) pp.remove();
+    drawFitted($('.slot canvas', row), strokes, getComputedStyle(document.documentElement).getPropertyValue('--sig-ink').trim() || '#1E2F7A');
+    const st = document.createElement('small'); st.className = 'stamp num'; st.textContent = `Signed ${nowStr()} · #${hash(rowId + JSON.stringify(strokes).length).slice(0, 6)}`;
+    $('div', row).appendChild(st);
+    checkAllSigned();
+  }
+  let passWho = null;
+  function checkAllSigned() {
+    const all = ['s-author', 's-dave', 's-mia', 's-jack'].every(id => $('#' + id).classList.contains('signed'));
+    $('#toSend').disabled = !all;
+    if (all && !$('#allSigned').classList.contains('on')) {
+      $('#lockLine').textContent = `3 of 3 crew · locked to this version · #${hash('BR-0143' + Date.now()).slice(0, 8)}`;
+      $('#allSigned').classList.add('on'); $('#meCard').hidden = true; $('#signScroll').scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+    }
+  }
+
+  /* ---------------- per-screen setup ---------------- */
+  const onEnter = {
+    home() { const d = new Date(); $('#today').textContent = d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '') + ' · ' + nowStr(); },
+    talk() { startTalk(); },
+    sign() { if (!sig.me) sig.me = fakeSig(0); requestAnimationFrame(() => drawFitted($('#meSig'), sig.me, '#F2F5F8')); }
+  };
+
+  /* ---------------- events ---------------- */
+  app.addEventListener('click', e => {
+    const t = e.target.closest('button,a'); if (!t) return;
+    if (t.matches('[data-back]')) return goBack();
+    if (t.dataset.go) return show(t.dataset.go);
+    if (t.dataset.cmd) return cmd(t.dataset.cmd);
+    if (t.dataset.ro) return ro(t.dataset.ro, t.dataset.v);
+    if (t.dataset.pass) { passWho = t.dataset.pass; $('#passName').textContent = passWho === 'mia' ? 'Mia' : 'Jack'; pads.pass.reset(); return openSheet('sheetPass'); }
+    if (t.hasAttribute('data-opt')) { t.setAttribute('aria-pressed', t.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); const n = $$('[data-opt][aria-pressed="true"]').length; $('#sendBtn').disabled = !n; return; }
+    switch (t.dataset.act) {
+      case 'open-sign': openSheet('sheetSign'); break;
+      case 'close-sheet': closeSheets(); break;
+      case 'terms': e.preventDefault(); toast('Terms open here, one short page'); break;
+      case 'save-sig': sig.me = pads.welcome.strokes.map(s => s.slice()); show('home'); setTimeout(() => toast('Signature saved'), 300); break;
+      case 'soon': toast('Not part of this preview'); break;
+      case 'say': toast('Listening… say it your way'); break;
+      case 'add-power': {
+        const a = $('#hzAmber'); const n = document.createElement('div'); n.className = 'hz new';
+        n.innerHTML = '<div class="hz-top"><h3>Overhead power line</h3><span class="risk">High</span></div><div class="ctrl"><svg class="ico"><use href="#i-check"/></svg><span><em>Admin · added just now</em>Energy provider contacted to make the service line safe before work starts. Nobody works inside the exclusion zone.</span></div>';
+        a.replaceWith(n); toast('Added'); break; }
+      case 'keep-power': {
+        const a = $('#hzAmber'); a.className = 'ro-ok'; a.innerHTML = '<svg class="ico" style="color:var(--muted)"><use href="#i-check"/></svg><span>Overhead power kept as is. You can come back to it any time.</span>'; break; }
+      case 'sign-me': if ($('#s-author').classList.contains('signed')) break; t.disabled = true; t.innerHTML = '<svg class="ico"><use href="#i-check"/></svg>Signed'; if (!sig.me) sig.me = fakeSig(0); putSig('s-author', sig.me); setTimeout(() => putSig('s-dave', sig.me), reduce ? 0 : 260); toast('Signed both places'); break;
+      case 'pass-sign': { const s = pads.pass.strokes.map(x => x.slice()); closeSheets(); setTimeout(() => putSig('s-' + passWho, s), reduce ? 0 : 280); break; }
+      case 'send': doSend(t); break;
+      case 'restart': $('#doneWrap').classList.remove('on'); stack.length = 0; show('home', {push:false, back:true}); break;
+    }
+  });
+  function cmd(c) {
+    if (c === 'thatsall') return thatsAll();
+    if (c === 'skip') { if (busy || step >= STEPS.length) return; step++; nextField(); if (step < STEPS.length) sayApp('No worries, we can come back to it. ' + STEPS[step].app); else finishTalk(); return; }
+    if (c === 'readback') return toast('Reading it back to you…');
+    if (c === 'info') { const k = STEPS[step] ? Object.keys(STEPS[step].fill)[0] : null; const tips = { 'f-site': 'The street address, so anyone can find the job.', 'f-pc': "The builder running the site, if there is one.", 'f-resp': 'Whoever makes sure the controls happen. Often you.' }; return toast(tips[k] || 'Say it how you would to a mate'); }
+    if (c === 'type') { $('#dock').classList.add('typing'); $('#typeIn').focus(); }
+  }
+  $('#typebox').addEventListener('submit', e => { e.preventDefault(); const v = $('#typeIn').value.trim(); $('#dock').classList.remove('typing'); $('#typeIn').value = ''; if (v) runStep(v); });
+  $('#typeIn').addEventListener('blur', () => setTimeout(() => { if (!$('#typeIn').value) $('#dock').classList.remove('typing'); }, 150));
+  $('#talkMic').addEventListener('click', () => runStep(null));
+  function ro(id, v) {
+    const el = $('#' + id); el.classList.add(v);
+    $('.result span', el).textContent = v === 'done' ? 'Added' : 'Kept as is';
+    const done = $$('.ro.done').length; const n = 14 + done;
+    $('#ringNum').innerHTML = `${n}<small>of 16</small>`;
+    $('#ringFg').style.strokeDashoffset = 226.2 * (1 - n / 16);
+  }
+  async function doSend(btn) {
+    const opts = $$('[data-opt][aria-pressed="true"]').map(o => $('h3', o).textContent);
+    btn.disabled = true; btn.innerHTML = '<span class="sending"><span class="spin"></span>Sending</span>';
+    await wait(1100);
+    const also = opts.filter(o => !o.startsWith('Email')); $('#alsoLine').textContent = also.length ? also.join(', ') : 'Nothing else';
+    const emailed = opts.some(o => o.startsWith('Email'));
+    $('.done-card h2').textContent = emailed ? 'Sent to Tom.' : 'All done.';
+    $('#sentTime').textContent = nowStr();
+    $('#doneWrap').classList.add('on');
+    btn.disabled = false; btn.innerHTML = '<svg class="ico"><use href="#i-send"/></svg>Send';
+  }
+
+  /* ---------------- preview picker ---------------- */
+  function renderPv() {
+    $('#pvNow').textContent = `${ORDER.indexOf(current) + 1}/8 · ${NAMES[current]}`;
+    $('#pvMenu').innerHTML = ORDER.map((s, i) => `<button data-pv="${s}" aria-current="${s === current}"><span>${i + 1}</span>${NAMES[s]}</button>`).join('');
+  }
+  $('#pvBtn').addEventListener('click', e => { e.stopPropagation(); const p = $('#pv'); p.classList.toggle('open'); $('#pvBtn').setAttribute('aria-expanded', p.classList.contains('open')); });
+  $('#pvMenu').addEventListener('click', e => { const b = e.target.closest('[data-pv]'); if (!b) return; e.stopPropagation(); $('#pv').classList.remove('open'); stack.length = 0; if (b.dataset.pv !== 'welcome') stack.push('home'); show(b.dataset.pv, {push:false}); });
+  document.addEventListener('click', e => { if (!e.target.closest('#pv')) $('#pv').classList.remove('open'); });
+  window.addEventListener('resize', () => { pads.welcome.fit(); pads.pass.fit(); if (current === 'sign' && sig.me) drawFitted($('#meSig'), sig.me, '#F2F5F8'); });
+
+  renderPv();
+  const start = (location.hash || '').slice(1);
+  if (ORDER.includes(start) && start !== 'welcome') { stack.push('home'); show(start, {push:false}); }
+})();
+</script>
