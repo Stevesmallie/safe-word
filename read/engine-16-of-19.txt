@@ -1,0 +1,132 @@
+=== safe-word-engine.ts — part 16 of 19. Join all parts in order to get the full file. ===
+
+  // ---- Assembly, controls, signatures ----
+  let swms = assemble(brief2, sel, { name: "Test Roofing Pty Ltd" });
+  assert.equal(swms.hazards[0].controls[0].level, "engineering");
+
+  const vault = new SignatureVault();
+  assert.throws(() => vault.save("dave", "Dave", "M1 1 L2 2")); // stray tap rejected
+  const v1 = vault.save("dave", "Dave", SIG);
+  vault.save("mia", "Mia", SIG);
+
+  // Vague control rejected; proper one accepted.
+  assert.throws(() => resolveFlag(swms, "windy", { id: "w", description: "Wind", risk: "Fall", controls: [{ id: "w0", text: "be careful", level: "administrative" }] }));
+  const preResolve = swms;
+  assert.throws(() => signOff(preResolve, applySignature(vault, { actingUserId: "dave", fieldId: "crew", role: "Roofer", documentHash: preResolve.contentHash, confirmedTap: true })));
+  swms = resolveFlag(swms, "windy", { id: "wind", description: "Wind on roof", risk: "Loss of balance", controls: [{ id: "w1", text: "Stop roof work if wind exceeds the agreed limit", level: "administrative" }] });
+
+  // Must tap; can't apply someone else's signature.
+  assert.throws(() => applySignature(vault, { actingUserId: "dave", fieldId: "crew", role: "Roofer", documentHash: swms.contentHash, confirmedTap: false }));
+  assert.throws(() => applySignature(vault, { actingUserId: "nobody", fieldId: "crew", role: "Roofer", documentHash: swms.contentHash, confirmedTap: true }));
+
+  const stampDave = applySignature(vault, { actingUserId: "dave", fieldId: "crew", role: "Roofer", documentHash: swms.contentHash, confirmedTap: true });
+  const stampMia = applySignature(vault, { actingUserId: "mia", fieldId: "crew", role: "Labourer", documentHash: swms.contentHash, confirmedTap: true });
+  const sigs = [signOff(swms, stampDave), signOff(swms, stampMia)];
+  assert.equal(validSignatures(swms, sigs).length, 2);
+
+  // Same saved signature reused on another document, unlimited times.
+  const other = applySignature(vault, { actingUserId: "dave", fieldId: "author", role: "Roofer", documentHash: "another-doc", confirmedTap: true });
+  assert.equal(other.signatureId, v1.id);
+
+  // Redo signature: new version current, old documents still verify.
+  const v2 = vault.save("dave", "Dave", SIG + " L190 40");
+  assert.equal(v2.version, 2);
+  assert.ok(verifyStamp(vault, stampDave, swms.contentHash));
+  assert.equal(applySignature(vault, { actingUserId: "dave", fieldId: "x", role: "Roofer", documentHash: "d", confirmedTap: true }).signatureVersion, 2);
+
+  // Edit after signing voids signatures.
+  const edited = applyEdit(swms, { brief: { ...swms.brief, crewSize: 3 } });
+  assert.equal(validSignatures(edited, sigs).length, 0);
+
+  // Unreviewed specialist module never used; no-HRCW notice.
+  const elec = select(parseBrief("swapping a switchboard", JSON.stringify({ task: "Swap switchboard", equipment: [], siteConditions: [] })), library);
+  assert.equal(elec.modules.length, 0);
+  assert.ok(elec.notCovered.some((f) => f.item.includes("energised")));
+  const plain = select(parseBrief("painting a fence", JSON.stringify({ task: "Paint fence", equipment: ["brush"], siteConditions: [] })), library);
+  assert.equal(plain.hrcw.length, 0);
+  assert.ok(plain.notices[0].startsWith("No high-risk"));
+  assert.ok(select(parseBrief("re-roofing", JSON.stringify({ task: "re-roofing", equipment: [], siteConditions: [] })), library).hrcw.some((h) => h.id === "falls"));
+
+  // ---- Smart phrasing faithfulness ----
+  assert.deepEqual(numbersIn("forty five k's and 7 m"), [7, 45]);
+  const good = faithfulnessCheck("re-roofing a two storey house seven metres up, angle grinder, two of us", "Re-roofing a two-storey house at a height of 7 m using an angle grinder. Crew of 2.");
+  assert.ok(good.ok, good.problems.join("; "));
+  const addedControl = faithfulnessCheck("re-roofing seven metres up", "Re-roofing at 7 m. Workers will wear a harness.");
+  assert.ok(!addedControl.ok && addedControl.text === "re-roofing seven metres up");
+  const addedNumber = faithfulnessCheck("re-roofing up high", "Re-roofing at 9 m.");
+  assert.ok(!addedNumber.ok);
+  assert.ok(!faithfulnessCheck("roof", "NEEDS_MORE_DETAIL").ok);
+
+  // ---- Voice guide & troubleshooting ----
+  const f = GENERIC_SWMS;
+  assert.equal(nextPrompt(f, {}).fieldId, "businessName"); // logo optional
+  assert.equal(checkField(f.fields.find((x) => x.id === "abn")!, "123")?.problem, "missing");
+  assert.equal(checkField(f.fields.find((x) => x.id === "workDescription")!, "roof job")?.problem, "too-brief");
+  const values: Record<string, unknown> = {
+    businessName: "Test Roofing", abn: "51 824 753 556", businessAddress: "4 Industrial Ave Proserpine", siteAddress: "12 Main Street Proserpine",
+    workDescription: "Re-roofing a two-storey house at 7 m using an angle grinder, crew of 2.",
+    hrcw: ["falls"], hazards: swms.hazards, responsiblePerson: "Dave",
+    reviewTrigger: "Review if the scope, crew or conditions change.", controlMonitoring: "Leading hand checks edge protection every morning.", datePrepared: "2026-10-25",
+    authorSignature: stampDave, crewSignatures: [stampDave, stampMia],
+  };
+  assert.deepEqual(troubleshoot(f, values, { notCoveredCount: 0 }), []);
+  const missingSig = troubleshoot(f, { ...values, crewSignatures: [] });
+  assert.equal(missingSig[0].problem, "unsigned");
+  assert.equal(troubleshoot(f, values, { notCoveredCount: 2 })[0].problem, "not-covered");
+  // Talking style: short first ask, shorter second, help only on a third miss or when asked.
+  const abnField = f.fields.find((x) => x.id === "abn")!;
+  const talk = { attempts: {} as Record<string, number>, completedSwms: 0, muted: false };
+  assert.equal(whatToSay(abnField, talk), "And the ABN?");
+  assert.equal(whatToSay(abnField, { ...talk, attempts: { abn: 1 } }), "ABN?");
+  assert.equal(whatToSay(abnField, { ...talk, attempts: { abn: 2 } }), abnField.helpPrompt);
+  assert.equal(whatToSay(abnField, talk, true), abnField.helpPrompt);
+  assert.equal(whatToSay(abnField, { ...talk, muted: true }), null);
+  for (const fld of f.fields) assert.ok(fld.voicePrompt.split(/\s+/).length <= 10, `prompt too long: ${fld.voicePrompt}`);
+  const pre = prefill(f, { businessName: "Test Roofing", abn: "51 824 753 556", businessAddress: "4 Industrial Ave Proserpine" }, "2026-10-25");
+  assert.equal(nextPrompt(f, pre).fieldId, "siteAddress"); // known details never asked
+  assert.ok(troubleshootSummary([]).startsWith("Had a read through"));
+  assert.equal(troubleshoot(f, { ...values, siteAddress: "" })[0].spoken, "Looks like the site address hasn't gone in yet.");
+  // "That's all" keeps a light answer and stops the nudging — but can't wave through empty fields.
+  for (const u of ["That's all", "that'll do", "leave it", "keep it as is", "That's all I've got"]) assert.equal(parseCommand(u).type, "keep", u);
+  const light = { ...values, workDescription: "Fixing a roof" };
+  assert.equal(troubleshoot(f, light)[0].problem, "too-brief");
+  assert.deepEqual(troubleshoot(f, light, { accepted: ["workDescription"] }), []);
+  assert.equal(troubleshoot(f, { ...values, siteAddress: "" }, { accepted: ["siteAddress"] })[0].problem, "missing");
+  assert.equal(checkControl("stop if windy"), "That's a bit light. What'll you do, and how?");
+  assert.equal(checkControl("stop if windy", true), null);
+  assert.notEqual(checkControl("be careful", true), null); // still has to be an actual action
+  assert.equal(parseCommand("Read it back").type, "readBack");
+  assert.equal(parseCommand("yep").type, "yes");
+  assert.equal(parseCommand("I'll type").type, "typeMode");
+  const ch = parseCommand("change site address to 14 Main Street");
+  assert.ok(ch.type === "change" && matchField(f, ch.field)?.id === "siteAddress");
+  assert.equal(parseCommand("fixing gutters on a shed").type, "answer");
+
+  // ---- More ways to say things ----
+  const said = (u: string) => parseCommand(u);
+  assert.equal(said("Yeah nah").type, "no");
+  assert.equal(said("nah yeah").type, "yes");
+  assert.equal(said("She'll be right").type, "keep");
+  assert.equal(said("scratch that").type, "undo");
+  assert.equal(said("who's left to sign").type, "whoSigned");
+  assert.equal(said("redo my signature").type, "redoSignature");
+  assert.equal(said("same as last job").type, "sameAsLast");
+  assert.equal(said("new job").type, "newSwms");
+  assert.equal(said("use my paperwork").type, "usePaperwork");
+  assert.equal(said("open an old report").type, "openOld");
+  assert.equal(said("give me a sec").type, "pause");
+  assert.equal(said("shush").type, "quiet");
+  assert.equal(said("any ideas").type, "suggest");
+  assert.equal(said("use that").type, "useSuggestion");
+  assert.equal(said("what's missing").type, "check");
+  assert.equal(said("what's left").type, "whatsLeft");
+  const em = said("email it to Tom");
+  assert.ok(em.type === "emailTo" && em.name === "tom");
+  const cl = said("clear the address");
+  assert.ok(cl.type === "clear" && matchField(f, cl.field)?.id === "siteAddress");
+  const gt = said("go to the hazards bit");
+  assert.ok(gt.type === "goTo" && matchField(f, gt.field)?.id === "hazards");
+  const rf = said("what's the builder");
+  assert.ok(rf.type === "readField" && matchField(f, rf.field)?.id === "principalContractor");
+  const vg = said("use the bloke's voice");
+  assert.ok(vg.type === "voice" && vg.gender === "male");

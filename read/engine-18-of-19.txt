@@ -1,0 +1,126 @@
+=== safe-word-engine.ts — part 18 of 19. Join all parts in order to get the full file. ===
+
+  // ---- Company paperwork ----
+  assert.equal(guessKey("Principal_Contractor"), "principalContractor");
+  assert.equal(guessKey("Worker Signature 3"), "crewSignatures");
+  const { form, unmatched } = buildCompanyForm("co1", "Acme SWMS", "https://files/acme.pdf", [
+    { name: "Company Name", kind: "text", page: 1, rect: { x: 50, y: 700, w: 200, h: 20 } },
+    { name: "Job Address", kind: "text", page: 1, rect: { x: 50, y: 670, w: 200, h: 20 } },
+    { name: "Box 17", kind: "text", page: 2, rect: { x: 50, y: 100, w: 200, h: 20 } },
+  ]);
+  assert.deepEqual(form.fields.map((x) => x.key), ["businessName", "siteAddress"]);
+  assert.equal(unmatched.length, 1);
+  const labelled = labelField(form, unmatched[0], "responsiblePerson");
+  assert.equal(labelled.fields.length, 3);
+  const lib = new PaperworkLibrary();
+  lib.add(labelled);
+  assert.equal(lib.list("co1").length, 2);
+  assert.throws(() => lib.remove("generic-swms"));
+
+  // ---- Voice, logo, output ----
+  const lines = promptLibrary();
+  assert.ok(lines.length > 20 && lines.includes(f.fields[1].voicePrompt));
+  assert.match(audioKey("Got it.", "female"), /^\/voice\/female\/[0-9a-f]+\.mp3$/);
+  assert.ok(azureSsml("Fish & chips", "male").includes("en-AU-WilliamNeural") && azureSsml("Fish & chips", "male").includes("&amp;"));
+  assert.ok(elevenLabsRequest("hi", "female", "k").url.includes("/stream"));
+  assert.equal(domainFrom("https://www.Acme-Roofing.com.au/about"), "acme-roofing.com.au");
+  assert.equal(logoLookupUrl("not a site"), null);
+  const log = new SentLog();
+  log.record({ documentId: swms.id, documentName: "SWMS", contentHash: swms.contentHash, channel: "email", to: ["builder@example.com"] });
+  assert.equal(log.list(swms.id).length, 1);
+  assert.deepEqual(validEmails(["a@b.com", "nope"]).bad, ["nope"]);
+  assert.ok(emailPayload({ to: ["a@b.com"], fromName: "Dave", documentName: "SWMS", siteAddress: "12 Main St", pdfBase64: "x", baseUrl: "https://www.example.com.au" }).text.includes("Made with Safe Word · www.example.com.au/start"));
+
+  // ---- Launch gate ----
+  const goodCase: GateCase = { name: "roof", brief: brief2, expect: { task: true, equipment: ["grinder"], crewSize: 2, hrcw: ["falls"] } };
+  const badCase: GateCase = { ...goodCase, name: "missed crew", brief: { ...brief2, crewSize: null } };
+  assert.equal(runGate(Array(9).fill(goodCase).concat([badCase]), library).launch, true);
+  assert.equal(runGate(Array(8).fill(goodCase).concat([badCase, badCase]), library).launch, false);
+
+  // ---- SEO ----
+  const cfg = { ...SITE_DEFAULTS, baseUrl: "https://www.example-domain.com.au", reviewer: { name: "Test Reviewer", credential: "Diploma of Work Health and Safety" }, tradePhotos: { roofers: true } };
+  TRADES[0].reviewed = true; // simulate the founder approving the roofer page
+  const pages = buildSite(library, cfg);
+  TRADES[0].reviewed = false;
+  const paths = pages.map((p) => p.path);
+  assert.ok(paths.includes("swms/index.html"));
+  assert.ok(paths.includes("swms/working-at-heights/index.html"));
+  assert.ok(paths.includes("swms-for/roofers/index.html"));
+  assert.ok(!paths.some((p) => p.includes("electrical"))); // specialist review missing
+  assert.ok(!paths.includes("swms-for/plumbers/index.html")); // intro not reviewed
+  const errors = lintPages(pages, cfg, ["lorem ipsum"]);
+  assert.deepEqual(errors, [], errors.join("\n"));
+  assert.ok(lintPages(buildSite(library), SITE_DEFAULTS).some((e) => e.includes("PASTE_"))); // placeholders block launch
+  const ld = pages.find((p) => p.path === "swms/working-at-heights/index.html")!.body;
+  assert.ok(ld.includes('"reviewedBy"') && ld.includes('"FAQPage"') && ld.includes('"BreadcrumbList"'));
+  assert.ok(pages.find((p) => p.path === "sitemap.xml")!.body.includes("/swms/working-at-heights/"));
+  const roofPage = pages.find((p) => p.path === "swms-for/roofers/index.html")!.body;
+  assert.ok(roofPage.includes('src="/img/trades/roofers.webp"') && roofPage.includes("/img/trades/roofers-share.jpg"));
+  assert.ok((roofPage.match(/class="tape/g) || []).length >= 3); // hi-vis tape top, divider, bottom
+  assert.ok(!pages.find((p) => p.path === "swms/index.html")!.body.includes("<img")); // no photo = nothing broken
+
+  // ---- Company paperwork access ----
+  const acc = new CompanyAccess(defaultNotice("Acme Roofing"), "co1");
+  acc.grant("owner1", "owner", "owner1", "2026-10-01");
+  acc.grant("dave", "worker", "owner1", "2026-10-01");
+  assert.equal(acc.canUseForm("dave", labelled).reason, "accept-notice"); // notice first
+  acc.acceptNotice("dave", "2026-10-02");
+  assert.ok(acc.canUseForm("dave", labelled).ok);
+  assert.ok(acc.canUseForm("stranger", GENERIC_SWMS).ok); // our template is free for everyone
+  assert.equal(acc.canUseForm("stranger", labelled).reason, "not-member");
+  assert.equal(acc.canDownloadBlank("dave"), false);
+  assert.equal(acc.canDownloadBlank("owner1"), true);
+  acc.updateNotice(defaultNotice("Acme Roofing", 2));
+  assert.equal(acc.canUseForm("dave", labelled).reason, "accept-notice"); // changed notice, accept again
+  acc.acceptNotice("dave", "2026-10-03");
+  assert.throws(() => acc.remove("dave", "dave", "2026-10-20", [], "owner1")); // workers can't remove
+  const daveDraft = { ...newDraft(labelled, "Dave's draft"), ownerId: "dave" };
+  const out = acc.remove("dave", "owner1", "2026-10-20", [daveDraft], "owner1");
+  assert.equal(out.transferred[0].ownerId, "owner1"); // no work lost
+  assert.equal(acc.canUseForm("dave", labelled).reason, "removed");
+  assert.ok(verifyStamp(vault, stampDave, swms.contentHash)); // past signed records untouched
+  assert.ok(acc.log.some((l) => l.event === "removed" && l.userId === "dave"));
+  for (const line of [out.messageForPerson, out.messageForOwner]) for (const b of TONE_BANNED) assert.ok(!line.toLowerCase().includes(b), line);
+  acc.grant("dave", "worker", "owner1", "2026-11-01");
+  assert.ok(acc.canUseForm("dave", labelled).ok); // re-invited: access back
+  assert.ok(acc.log.some((l) => l.event === "restored"));
+  assert.ok(offlineCopyValid("2026-10-20T00:00:00Z", "2026-10-26T00:00:00Z"));
+  assert.ok(!offlineCopyValid("2026-10-20T00:00:00Z", "2026-10-28T00:00:00Z"));
+  assert.ok(companyFooter("Acme Roofing").includes("Confidential to Acme Roofing"));
+
+  // ---- Upload advisory (never blocks) ----
+  const own = { businessName: "Test Roofing", abn: "51 824 753 556" };
+  assert.equal(otherCompanyIn("Company: Test Roofing\nABN 51 824 753 556", own), null);
+  const otherCo = otherCompanyIn("Company Name: Big Build Constructions\nABN 12 345 678 901", own);
+  assert.equal(otherCo, "Big Build Constructions");
+  assert.equal(uploadAdvisory(otherCo!).text, "Heads up: this looks like Big Build Constructions' paperwork. Using it may need their OK. Continue?");
+  assert.ok(uploadAdvisory("Acme Roofing").text.includes("Acme Roofing's paperwork"));
+  assert.deepEqual(uploadAdvisory("another company").options, ["Continue", "Cancel"]);
+  assert.equal(otherCompanyIn("A blank SWMS with no business details", own), null);
+
+  // ---- First-run terms: once, smooth, recorded ----
+  const ledger = new TermsLedger();
+  const v2vault = new SignatureVault();
+  assert.equal(termsPrompt(ledger, "sam"), "first-run");
+  assert.equal(ledger.appUnlocked("sam"), false); // locked until signed
+  const fr = firstRunSave(v2vault, ledger, { userId: "sam", name: "Sam Taylor", svgPath: SIG, device: "iPhone, Safari", at: "2026-10-25T06:40:00Z" });
+  assert.equal(v2vault.current("sam")!.id, fr.signature.id); // same signature saved for everyday use
+  assert.ok(ledger.appUnlocked("sam"));
+  assert.equal(termsPrompt(ledger, "sam"), "none"); // never again
+  firstRunSave(v2vault, ledger, { userId: "sam", name: "Sam Taylor", svgPath: SIG, device: "iPhone", at: "2026-10-26T00:00:00Z" });
+  assert.equal(ledger.all().length, 1); // no duplicate records
+  const uc = userCopyEmail(fr.acceptance, "https://www.example.com.au");
+  assert.ok(uc.text.includes("G'day Sam") && uc.text.includes("version 1"));
+  const fs = founderSummary(ledger.since("2026-10-20"), "2026-10-20");
+  assert.equal(fs.to, "venture-lab-8grv@agentmail.to");
+  assert.ok(fs.subject.includes("1 new sign-up ") && fs.text.includes("Sam Taylor") && !fs.text.includes("M10"));
+  // Terms change: one quiet line, once.
+  (TERMS as { version: number }).version = 2;
+  assert.equal(termsPrompt(ledger, "sam"), "updated");
+  firstRunSave(v2vault, ledger, { userId: "sam", name: "Sam Taylor", svgPath: SIG, device: "iPhone", at: "2026-12-01T00:00:00Z", via: "terms-update" });
+  assert.equal(termsPrompt(ledger, "sam"), "none");
+  (TERMS as { version: number }).version = 1;
+  // Light, friendly copy only.
+  const firstRunWords = [FIRST_RUN_COPY.heading, ...FIRST_RUN_COPY.lines, FIRST_RUN_COPY.agreeLine, FIRST_RUN_COPY.button, CREW_FIRST_SIGN_LINE, TERMS_UPDATED_COPY.line].join(" ").toLowerCase();
+  for (const w of ["waiver", "disclaimer", "liability", "indemn", "hereby", "legal", ...TONE_BANNED]) assert.ok(!firstRunWords.includes(w), w);
+  assert.ok(FIRST_RUN_COPY.lines.length <= 2 && FIRST_RUN_COPY.agreeLine.split(" ").length <= 10);

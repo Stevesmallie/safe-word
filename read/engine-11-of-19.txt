@@ -1,0 +1,179 @@
+=== safe-word-engine.ts — part 11 of 19. Join all parts in order to get the full file. ===
+
+export function checkExistingSwms(documentText: string, job: JobBrief | null, library: Module[]): CheckReport {
+  const items: CheckItem[] = ELEMENTS.map((e) => ({
+    label: e.label,
+    status: e.any.test(documentText) ? "covered" : "missing",
+    note: e.note,
+  }));
+
+  if (GENERIC_SIGNS.test(documentText))
+    items.push({ label: "Template text left in", status: "worth-a-look", note: "Looks like some template placeholders are still in there. Builders often knock these back." });
+
+  if (job) {
+    const sel = select(job, library);
+    const doc = documentText.toLowerCase();
+    for (const a of sel.hrcw) {
+      const cat = HRCW_CATEGORIES.find((c) => c.id === a.id)!;
+      const mentioned = cat.triggers.some((t) => doc.includes(t.toLowerCase()));
+      items.push(mentioned
+        ? { label: a.title, status: "covered", note: "Your job involves this, and the SWMS mentions it." }
+        : { label: a.title, status: "missing", note: "Your job sounds like it involves this, but we couldn't find it in the SWMS." });
+    }
+    if (job.location && !doc.includes(job.location.toLowerCase()))
+      items.push({ label: "Site-specific", status: "worth-a-look", note: `We couldn't see ${job.location} mentioned. A SWMS that doesn't name the site often gets knocked back.` });
+  }
+
+  const covered = items.filter((i) => i.status === "covered").length;
+  const gaps = items.length - covered;
+  return {
+    items, covered, total: items.length,
+    summary: gaps === 0
+      ? "Had a read through. Everything we look for is in there."
+      : `Had a read through. ${covered} of ${items.length} look covered. ${gaps === 1 ? "One thing" : `${gaps} things`} worth a look.`,
+    disclaimer: "This is a quick automated read of the document, not a compliance assessment. The business doing the work is responsible for its SWMS.",
+  };
+}
+
+// ===================== content =====================
+// Founder's content console logic: what has to be true before a module can be marked reviewed.
+// Drafts come from Safe Work Australia and state regulator codes of practice; the founder edits,
+// then this check must pass before "Mark reviewed" is allowed.
+
+
+export function reviewBlockers(m: Module): string[] {
+  const out: string[] = [];
+  if (m.sources.length === 0) out.push("Add the code of practice or guidance this was drafted from.");
+  if (m.hazards.length === 0) out.push("Add at least one hazard.");
+  for (const h of m.hazards) {
+    if (!h.risk.trim()) out.push(`"${h.description}" needs a risk description.`);
+    if (h.controls.length === 0) out.push(`"${h.description}" has no controls.`);
+    else if (h.controls.every((c) => c.level === "ppe" || c.level === "administrative"))
+      out.push(`"${h.description}" only has admin or PPE controls. Is a higher-order control reasonably practicable?`);
+  }
+  if (m.triggers.length === 0) out.push("Add trigger words so the module gets picked up from a brief.");
+  if (m.seoSummary !== undefined && m.seoSummary.split(/\s+/).filter(Boolean).length < 120)
+    out.push("The public page summary needs at least 120 words, or leave it blank to keep the page unpublished.");
+  return out;
+}
+
+export function markReviewed(m: Module, reviewer: string, date: string): Module {
+  const blockers = reviewBlockers(m);
+  if (blockers.length) throw new Error(blockers.join(" "));
+  return { ...m, status: "reviewed", reviewedBy: reviewer, reviewedAt: date };
+}
+
+// Any edit to reviewed content makes a new draft version that needs reviewing again.
+export function editModule(m: Module, change: Partial<Pick<Module, "hazards" | "triggers" | "sources" | "seoSummary" | "title">>): Module {
+  return { ...m, ...change, version: m.version + 1, status: "draft", reviewedBy: undefined, reviewedAt: undefined, specialistReviewedBy: undefined };
+}
+
+// Which states the current content suits. Victoria uses its own list of 19 high-risk activities
+// under the OHS Regulations 2017, so Victorian businesses get a clear notice until a Victorian
+// list is added and reviewed.
+export function jurisdictionNotice(state: string): string | null {
+  return state.toUpperCase() === "VIC"
+    ? "Heads up: Victoria uses its own list of high-risk construction work. Safe Word's content is built on the national model list, so check your SWMS against the Victorian requirements."
+    : null;
+}
+
+// ===================== voice =====================
+// Voice output: natural Australian female and male voices.
+// Primary: Microsoft Azure neural voices en-AU-NatashaNeural (female) and en-AU-WilliamNeural (male).
+// Azure's free tier covers 0.5 million characters of neural speech a month — enough for thousands of
+// SWMS — so voice costs nothing during pilots. Use ONE provider for every line so the voice never changes
+// mid-conversation.
+// Optional later upgrade: ElevenLabs (most human-sounding). Only switch once paying customers justify it,
+// and switch every line at once.
+// Last resort offline: the phone's built-in voice.
+// Speech-to-text: Azure's free tier includes 5 hours a month of real-time recognition (set language en-AU
+// and add TRADE_VOCABULARY as phrase hints). Deepgram's free credit is a top-up if needed.
+//
+// Speed and cost: every fixed prompt (field prompts, help, commands) is generated ONCE at build time
+// and served as audio files, so it plays instantly and costs nothing per use. Only dynamic lines
+// (read-backs, names, addresses) are generated live.
+//
+// API keys stay on the server. The app calls our own /api/speak endpoint, never the provider directly.
+
+
+export type VoiceGender = "female" | "male";
+
+export const VOICE_CONFIG = {
+  provider: "azure" as "elevenlabs" | "azure",
+  elevenlabs: {
+    model: "eleven_flash_v2_5",
+    voices: { female: "AU_FEMALE_VOICE_ID_IF_UPGRADING", male: "AU_MALE_VOICE_ID_IF_UPGRADING" }, // only needed if switching to ElevenLabs
+    settings: { stability: 0.5, similarity_boost: 0.75, style: 0.15, use_speaker_boost: true },
+  },
+  azure: {
+    voices: { female: "en-AU-NatashaNeural", male: "en-AU-WilliamNeural" },
+    rate: "+0%",
+  },
+  // Site-friendly delivery: unhurried, clear, a touch warmer than a call-centre voice.
+  style: "Relaxed, friendly Australian. Clear and unhurried. Like an experienced leading hand, not a robot.",
+};
+
+// Server-side request builders (run inside /api/speak).
+export function elevenLabsRequest(text: string, gender: VoiceGender, apiKey: string) {
+  const c = VOICE_CONFIG.elevenlabs;
+  return {
+    url: `https://api.elevenlabs.io/v1/text-to-speech/${c.voices[gender]}/stream?output_format=mp3_44100_128`,
+    init: {
+      method: "POST",
+      headers: { "xi-api-key": apiKey, "Content-Type": "application/json", Accept: "audio/mpeg" },
+      body: JSON.stringify({ text, model_id: c.model, voice_settings: c.settings }),
+    },
+  };
+}
+
+const xml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+export function azureSsml(text: string, gender: VoiceGender): string {
+  const v = VOICE_CONFIG.azure;
+  return `<speak version="1.0" xml:lang="en-AU"><voice name="${v.voices[gender]}"><prosody rate="${v.rate}">${xml(text)}</prosody></voice></speak>`;
+}
+
+// Fixed lines to pre-generate as audio for both voices.
+// Kept deliberately small. Confirmations ("got it", "signature's on") are a soft tone and a
+// haptic tap, not words.
+export const SYSTEM_LINES = [
+  "Didn't catch that.",
+  "Typing it is.",
+  "Sent.",
+  "Saved.",
+  "Printing.",
+  "Had a read through. Looks good to me. Ready to send.",
+];
+
+export function promptLibrary(forms: FormTemplate[] = [GENERIC_SWMS]): string[] {
+  const lines = new Set(SYSTEM_LINES);
+  for (const f of forms) for (const fld of f.fields) {
+    lines.add(fld.voicePrompt);
+    lines.add(fld.helpPrompt);
+  }
+  return [...lines];
+}
+
+// Stable file name for a pre-generated line, e.g. /voice/female/3f2a9c1b.mp3
+export function audioKey(text: string, gender: VoiceGender): string {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return `/voice/${gender}/${(h >>> 0).toString(16)}.mp3`;
+}
+
+// How the voice behaves (helpful, never annoying):
+// - Ask, don't explain. One short question; help is spoken only when asked ("help", "what?") or after a second miss.
+// - Never narrate what the app is doing. Confirmations are a soft tone plus haptic.
+// - Never ask for what we already know: saved business details and today's date fill silently.
+// - Second ask is shorter, not a repeat. After 5 completed SWMS, prompts shrink to the bare question.
+// - One read-back at the end, not after every answer.
+// - Barge-in: the moment the user speaks, the voice stops and listens.
+// - Every spoken line also shows on screen (noisy sites, hearing protection).
+// - Female or male voice chosen once in settings; voice can be muted for text-and-tap only.
+
+// ===================== logo =====================
+// Company logo: three ways in, all optional.
+//  1. Photo: snap the logo off the ute door, a business card or letterhead. We crop and clean it.
+//  2. Upload: pick an image file.
+//  3. Find it: type the company website and we fetch the logo (via Logo.dev).
+// The user confirms it's their own business's logo before it's used on documents.

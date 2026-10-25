@@ -1,0 +1,109 @@
+=== safe-word-screens.html — part 3 of 9. Join all parts in order to get the full file. ===
+.logo-br small{font:600 9px/1 var(--f-mono);letter-spacing:.14em;color:var(--paper-mute);margin-top:5px}
+.paper-title{text-align:right}
+.paper-title strong{display:block;font:800 15px/1 var(--f-display);letter-spacing:.04em;text-transform:uppercase}
+.paper-title span{display:block;font:500 10px/1.3 var(--f-mono);color:var(--paper-mute);margin-top:4px}
+.fld{display:grid;grid-template-columns:96px 1fr;gap:10px;padding:9px 0;border-bottom:1px solid var(--paper-line);scroll-margin:24px}
+.fld:last-child{border-bottom:0}
+.fld dt{font:600 10px/1.3 var(--f-mono);letter-spacing:.04em;text-transform:uppercase;color:var(--paper-mute);padding-top:2px}
+.fld dd{margin:0;min-height:20px;font-weight:500}
+.fld dd:empty{background:linear-gradient(90deg,#C7CCD2 50%,transparent 0) 0 100%/6px 1.5px repeat-x}
+.fld.next dt{color:var(--paper-ink)}
+.fld.next dd:empty{background-image:linear-gradient(90deg,#0B0F14 50%,transparent 0);animation:blink 1.2s steps(2) infinite}
+@keyframes blink{50%{opacity:.35}}
+.hl{background:linear-gradient(100deg,transparent 0 .2em,var(--mark) .2em calc(100% - .2em),transparent 0) no-repeat 0 0/0% 100%;
+  animation:mark 900ms var(--ease) forwards;padding:0 .1em;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+@keyframes mark{to{background-size:100% 100%}}
+.hl.fade{transition:background-image 1.2s}
+.talk-panel{flex:none;background:var(--s1);border-radius:26px 26px 0 0;box-shadow:0 -1px 0 var(--line),0 -24px 60px rgba(0,0,0,.45);display:flex;flex-direction:column}
+.convo{max-height:178px;overflow-y:auto;padding:16px 18px 6px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+.say{max-width:88%;font-size:16px;line-height:1.38}
+.say--app{display:flex;gap:10px;align-items:flex-start}
+.say--app .who{width:28px;height:28px;border-radius:50%;flex:none;background:var(--s3);display:grid;place-items:center;color:var(--hv)}
+.say--app .who .wave{height:12px;gap:2px}
+.say--app .who .wave b{width:2px}
+.say--app p{margin:3px 0 0}
+.say--me{align-self:flex-end;background:var(--s2);padding:10px 14px;border-radius:18px 18px 4px 18px;color:#DCE3EA}
+.say--me .live{color:var(--muted)}
+.say-cta{align-self:flex-start;margin-left:38px}
+.dock{padding:8px 16px calc(14px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;align-items:center;gap:12px}
+.cmds{display:flex;gap:8px;overflow-x:auto;width:100%;padding:2px 2px 4px;scrollbar-width:none}
+.cmds::-webkit-scrollbar{display:none}
+.mic-row{display:flex;align-items:center;justify-content:space-between;width:100%}
+.mic-row .side{width:92px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;font-weight:600;color:var(--muted)}
+.mic-state{font:700 14px/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);height:16px}
+.typebox{display:none;gap:10px;width:100%}
+.typebox input{flex:1;min-width:0;height:var(--tap);border-radius:999px;border:0;background:var(--s2);color:var(--text);padding:0 20px;font:500 17px var(--f-body);box-shadow:inset 0 0 0 1px var(--line)}
+.dock.typing .typebox{display:flex}
+.dock.typing .mic-row{display:none}
+
+/* ======================= 4. HAZARDS ======================= */
+.page-head{padding:6px 20px 16px;display:flex;flex-direction:column;gap:8px}
+.hrcw{margin:0 20px;border-radius:var(--r-md);overflow:hidden;background:var(--s1);box-shadow:inset 0 0 0 1px var(--line)}
+.hrcw div{padding:14px 16px;display:flex;gap:12px;align-items:center}
+.hrcw strong{display:block;font-size:17px}
+.hrcw small{display:block;color:var(--muted);font-size:14px;margin-top:2px}
+.hz-list{display:flex;flex-direction:column;gap:12px;padding:16px 20px 24px}
+.hz{border-radius:var(--r-md);background:var(--s1);box-shadow:inset 0 0 0 1px var(--line);padding:16px;display:flex;flex-direction:column;gap:12px}
+.hz-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.hz h3{margin:0;font:700 18px/1.25 var(--f-body)}
+.risk{flex:none;font:600 11px/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;padding:6px 8px;border-radius:6px;background:rgba(255,92,92,.14);color:#FF7A7A}
+.risk--m{background:var(--amber-soft);color:var(--amber)}
+.ctrl{display:grid;grid-template-columns:22px 1fr;gap:10px;font-size:16px;line-height:1.4;color:#D7DEE5}
+.ctrl .ico{width:20px;height:20px;color:var(--green);margin-top:2px}
+.ctrl em{display:block;font:600 11px/1 var(--f-mono);font-style:normal;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.hz--amber{background:linear-gradient(180deg,rgba(255,176,32,.10),rgba(255,176,32,.03));box-shadow:inset 0 0 0 1.5px rgba(255,176,32,.45)}
+.hz--amber .label{color:var(--amber)}
+.hz--amber p{margin:0;color:#E6DCC8;font-size:16px}
+.hz-actions{display:flex;gap:10px;flex-wrap:wrap}
+.hz.new{animation:settle 500ms var(--ease)}
+@keyframes settle{from{transform:translateY(10px);opacity:0}}
+.foot{flex:none;padding:12px 20px calc(16px + env(safe-area-inset-bottom,0px));background:linear-gradient(180deg,rgba(11,15,20,0),var(--bg) 30%)}
+
+/* ======================= 5. READ-OVER ======================= */
+.ro-head{display:flex;gap:16px;align-items:center;padding:8px 20px 20px}
+.ring{position:relative;width:84px;height:84px;flex:none}
+.ring svg{width:84px;height:84px;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:7}
+.ring .bg{stroke:var(--s3)}
+.ring .fg{stroke:var(--hv);stroke-linecap:round;transition:stroke-dashoffset 700ms var(--ease)}
+.ring span{position:absolute;inset:0;display:grid;place-items:center;font:800 24px/1 var(--f-display)}
+.ring span small{display:block;font:600 10px/1 var(--f-mono);color:var(--muted);text-align:center;margin-top:2px}
+.ro-items{display:flex;flex-direction:column;gap:12px;padding:0 20px 24px}
+.ro{border-radius:var(--r-md);background:var(--s1);box-shadow:inset 0 0 0 1px var(--line);padding:16px;display:flex;flex-direction:column;gap:12px;transition:box-shadow var(--t),opacity var(--t)}
+.ro h3{margin:0;font:700 18px/1.25 var(--f-body)}
+.ro > p{margin:0;color:var(--muted);font-size:16px}
+.suggest{border-radius:12px;background:var(--s2);padding:12px 14px;font-size:16px;line-height:1.4;color:#E3E9EE;position:relative}
+.suggest em{display:block;font:600 11px/1 var(--f-mono);font-style:normal;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.ro-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ro.done{box-shadow:inset 0 0 0 1.5px rgba(61,220,132,.45)}
+.ro.kept{opacity:.62}
+.ro .result{display:none;align-items:center;gap:8px;font-weight:600;font-size:15px}
+.ro.done .result,.ro.kept .result{display:flex}
+.ro.done .result{color:var(--green)}
+.ro.kept .result{color:var(--muted)}
+.ro.done .ro-actions,.ro.kept .ro-actions{display:none}
+.ro-ok{display:flex;gap:12px;align-items:center;padding:14px 16px;border-radius:var(--r-md);background:var(--s1);box-shadow:inset 0 0 0 1px var(--line);color:var(--muted);font-size:16px}
+.ro-ok .ico{color:var(--green);flex:none}
+
+/* ======================= 6. SIGN ======================= */
+.sign-doc{padding:0 14px 22px}
+.paper .sec{font:800 13px/1 var(--f-display);letter-spacing:.08em;text-transform:uppercase;padding:14px 0 8px;border-bottom:2px solid var(--paper-ink)}
+.sgn{display:grid;grid-template-columns:1fr 118px;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--paper-line);min-height:72px}
+.sgn:last-child{border-bottom:0}
+.sgn b{display:block;font-weight:700;font-size:15px}
+.sgn small{display:block;font:500 10px/1.35 var(--f-mono);color:var(--paper-mute);margin-top:3px}
+.sgn .slot{height:54px;border-bottom:1.5px solid #9AA2AC;position:relative;display:grid;place-items:center}
+.sgn .slot canvas{position:absolute;inset:0;width:100%;height:100%}
+.sgn .slot .pp{position:relative;z-index:1;min-height:40px;padding:0 12px;border-radius:999px;background:var(--paper-ink);color:#fff;font:700 13px/1 var(--f-body);display:flex;align-items:center;gap:6px}
+.sgn.signed .slot{border-bottom-color:var(--sig-ink)}
+.stamp{font:600 9.5px/1.3 var(--f-mono);color:var(--sig-ink)}
+.me-card{margin:0 20px 16px;padding:16px;border-radius:var(--r-md);background:var(--s1);box-shadow:inset 0 0 0 1px var(--line);display:flex;flex-direction:column;gap:12px}
+.me-sig{height:76px;border-radius:12px;background:var(--s2);position:relative}
+.me-sig canvas{position:absolute;inset:0;width:100%;height:100%}
+.confirm{margin:0 20px 18px;border-radius:var(--r-md);overflow:hidden;background:var(--s1);box-shadow:inset 0 0 0 1px var(--line);display:none;animation:settle 500ms var(--ease)}
+.confirm.on{display:block}
+.confirm-body{padding:16px;display:flex;gap:14px;align-items:center}
+.tick{width:48px;height:48px;border-radius:50%;background:var(--green-soft);color:var(--green);display:grid;place-items:center;flex:none}
+.confirm h3{margin:0;font:800 26px/1 var(--f-display);text-transform:uppercase}
+.confirm p{margin:4px 0 0;font:500 13px/1.35 var(--f-mono);color:var(--muted)}

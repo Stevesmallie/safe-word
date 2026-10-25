@@ -1,0 +1,181 @@
+=== safe-word-engine.ts — part 6 of 19. Join all parts in order to get the full file. ===
+
+export function matchField(form: FormTemplate, spokenName: string): FieldDef | null {
+  const n = spokenName.toLowerCase().trim();
+  return (
+    form.fields.find((f) => f.label.toLowerCase() === n) ||
+    form.fields.find((f) => f.key && FIELD_ALIASES[f.key]?.includes(n)) ||
+    form.fields.find((f) => f.label.toLowerCase().includes(n) || n.includes(f.label.toLowerCase())) ||
+    null
+  );
+}
+
+// ===================== replies =====================
+// What Safe Word says back. Specific, short, friendly — it names the actual thing, never a generic "done".
+// Tone rules (enforced by TONE_BANNED in the self-test): the user is in charge. We offer, we don't instruct.
+// Never "you need to", "you must", "you forgot", "invalid", "error", "please" or anything that sounds like a telling-off.
+
+
+export const TONE_BANNED = [
+  "you need to", "you must", "you have to", "you forgot", "you didn't", "you did not", "you should",
+  "invalid", "error", "incorrect", "failed", "please", "required field", "as an ai", "i'm sorry, but", "mandatory",
+];
+
+const list = (names: string[]) =>
+  names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+
+const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
+export interface Contact { name: string; company?: string; email?: string }
+
+export const Replies = {
+  // Signing
+  whoSigned(signed: string[], waiting: string[]): string {
+    if (signed.length === 0 && waiting.length === 0) return "No one's on the crew list yet. Who's working on this one?";
+    if (signed.length === 0) return `No one's signed yet. Waiting on ${list(waiting)}.`;
+    if (waiting.length === 0) return `Everyone's signed: ${list(signed)}.`;
+    return `${list(signed)} ${signed.length === 1 ? "has" : "have"} signed. Just ${list(waiting)} to go.`;
+  },
+  crewLinkSent(count: number) {
+    return `Link's gone to ${count === 1 ? "one person" : `all ${count}`}. I'll let you know as they sign.`;
+  },
+  crewMemberSigned(name: string, remaining: number) {
+    return remaining === 0 ? `${name}'s signed. That's everyone.` : `${name}'s signed. ${remaining} to go.`;
+  },
+  redoSignature() { return "Draw your new one whenever you're ready. Your old one stays on anything already signed."; },
+
+  // Sending
+  emailTo(c: Contact | null, spokenName: string): string {
+    if (!c) return `I haven't got an email for ${spokenName} yet. What's their email?`;
+    if (!c.email) return `I've got ${c.name} but no email. What's the best one?`;
+    return `Sending to ${c.name}${c.company ? ` at ${c.company}` : ""}.`;
+  },
+  emailed(c: Contact) { return `Sent to ${c.name}. It's in your sent folder.`; },
+  sendOptions() { return "Email, print or save it?"; },
+  saved(name: string) { return `${name} saved to your phone.`; },
+  printing() { return "Sending it to the printer."; },
+
+  // Moving around
+  whatsLeft(remaining: FieldDef[]): string {
+    if (remaining.length === 0) return "Nothing left. Want me to read over it?";
+    if (remaining.length === 1) return `Just the ${spoken(remaining[0])} left.`;
+    if (remaining.length === 2) return `Two to go: the ${spoken(remaining[0])}, then the ${spoken(remaining[1])}.`;
+    return `${remaining.length} to go. Next up is the ${spoken(remaining[0])}.`;
+  },
+  readField(f: FieldDef, value: unknown): string {
+    if (value === undefined || value === null || value === "") return `The ${spoken(f)} is still blank.`;
+    return `The ${spoken(f)} says: ${String(value)}.`;
+  },
+  goTo(f: FieldDef) { return f.voicePrompt; },
+  cleared(f: FieldDef) { return `Cleared the ${spoken(f)}.`; },
+  changed(f: FieldDef, value: string) { return `Changed the ${spoken(f)} to ${value}.`; },
+  undone(f: FieldDef, previous: unknown) {
+    return previous === undefined || previous === "" ? `Put the ${spoken(f)} back to blank.` : `Put the ${spoken(f)} back to ${String(previous)}.`;
+  },
+  noField(spoken: string) { return `Not sure which bit you mean by ${spoken}. Which one?`; },
+
+  // Documents
+  newSwms(formName: string | null) { return formName ? `New one on your ${formName}. What's the job?` : "New one. What's the job?"; },
+  sameAsLast(jobName: string, copied: string[]) {
+    return `Copied the ${list(copied.map(lower))} from ${jobName}. Signatures start fresh.`;
+  },
+  reused(jobName: string, carried: number, left: number) {
+    return left === 0
+      ? `Copied ${carried} fields from ${jobName}. Have a look over it before anyone signs.`
+      : `Copied ${carried} fields from ${jobName}. ${left} left to fill. Voice or keyboard?`;
+  },
+  hazardsRebuilt() { return "I've rebuilt the hazards from our latest reviewed content, so they're current."; },
+
+  // Help, on request
+  suggestion(text: string, basis: string) { return `${basis}: ${text}. Want that, or something different?`; },
+  noSuggestion() { return "Nothing I'd want to guess on that one. What would you put?"; },
+
+  // Mishearing — offers, never blame
+  notHeard(times: number) {
+    return times <= 1 ? "Didn't catch that." : "Still not catching it, it might be the noise. Want to type that one?";
+  },
+
+  // Modes
+  typeMode() { return "Typing it is. I'll stay quiet unless you ask."; },
+  voiceMode(remaining: number) {
+    return remaining === 0 ? "Righto, I'm listening." : `Righto. ${remaining} left, I'll go through them with you.`;
+  },
+  quiet() { return "Going quiet. Tap the mic or say voice on when you want me."; },
+  paused() { return "No worries, take your time."; },
+  cancelled() { return "No worries, left it as it was."; },
+  voiceChanged(gender: "female" | "male") { return gender === "female" ? "This is the female voice. Sound alright?" : "This is the male voice. Sound alright?"; },
+};
+
+// ===================== pacing =====================
+// Pacing: WHEN the voice speaks matters as much as what it says.
+// The person is in charge. The voice waits its turn, never talks over them, never chases them,
+// and saves its observations for when they ask, like a good offsider would.
+//
+// Rules this enforces:
+//  1. Never speak while the person is talking, typing or touching the screen.
+//  2. Wait for them to finish. Short answers: a 0.9 s pause ends the turn. Long answers
+//     (job description, controls): 2.2 s, because people pause to think mid-sentence.
+//  3. After any tap or keystroke, stay quiet for 5 s. They're doing it themselves.
+//  4. Silence is fine. If they go quiet on a field, the voice says nothing; the ℹ️ button glows softly
+//     after 12 s. Help is only spoken when they ask, or offered (as a question) after a second miss.
+//  5. One offer per field, ever. If they ignore it, it's dropped.
+//  6. Light answers are not flagged during filling. They're saved for the read-over, which only
+//     happens when they say they're done or reach the end.
+//  7. At least 0.6 s between anything the app says, so it never gabbles.
+//  8. "Stop", "hang on" or "quiet" silence it instantly.
+
+export type Event =
+  | { type: "speechStart"; at: number }
+  | { type: "speechEnd"; at: number; longAnswerField: boolean }
+  | { type: "touch"; at: number }
+  | { type: "appSpoke"; at: number }
+  | { type: "fieldChanged"; at: number; fieldId: string }
+  | { type: "missed"; fieldId: string } // answer not understood or rejected
+  | { type: "offerMade"; fieldId: string }
+  | { type: "pause" } | { type: "resume" } | { type: "quiet" } | { type: "voiceOn" };
+
+export const PACING = {
+  endOfTurnShortMs: 900,
+  endOfTurnLongMs: 2200,
+  quietAfterTouchMs: 5000,
+  infoGlowAfterMs: 12000,
+  minGapMs: 600,
+};
+
+export class Pacer {
+  private speaking = false;
+  private lastSpeechEnd = -Infinity;
+  private lastLong = false;
+  private lastTouch = -Infinity;
+  private lastAppSpoke = -Infinity;
+  private fieldSince = 0;
+  private misses: Record<string, number> = {};
+  private offered = new Set<string>();
+  private paused = false;
+  private muted = false;
+  private field: string | null = null;
+
+  on(e: Event): void {
+    switch (e.type) {
+      case "speechStart": this.speaking = true; break;
+      case "speechEnd": this.speaking = false; this.lastSpeechEnd = e.at; this.lastLong = e.longAnswerField; break;
+      case "touch": this.lastTouch = e.at; break;
+      case "appSpoke": this.lastAppSpoke = e.at; break;
+      case "fieldChanged": this.field = e.fieldId; this.fieldSince = e.at; break;
+      case "missed": this.misses[e.fieldId] = (this.misses[e.fieldId] ?? 0) + 1; break;
+      case "offerMade": this.offered.add(e.fieldId); break;
+      case "pause": this.paused = true; break;
+      case "resume": this.paused = false; break;
+      case "quiet": this.muted = true; break;
+      case "voiceOn": this.muted = false; break;
+    }
+  }
+
+  // May the app speak right now?
+  canSpeak(now: number): boolean {
+    if (this.muted || this.paused || this.speaking) return false;
+    if (now - this.lastTouch < PACING.quietAfterTouchMs) return false;
+    if (now - this.lastAppSpoke < PACING.minGapMs) return false;
+    const wait = this.lastLong ? PACING.endOfTurnLongMs : PACING.endOfTurnShortMs;
+    return now - this.lastSpeechEnd >= wait;
+  }

@@ -1,0 +1,203 @@
+=== safe-word-engine.ts — part 12 of 19. Join all parts in order to get the full file. ===
+
+export const LOGO_DEV = {
+  publishableKey: "PASTE_LOGO_DEV_PK_KEY", // pk_ keys are safe in the browser
+  // Free plans may require a visible "Logos provided by Logo.dev" link — check their attribution terms.
+};
+
+export function domainFrom(input: string): string | null {
+  const s = input.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[/?#]/)[0];
+  return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(s) ? s : null;
+}
+
+export function logoLookupUrl(website: string, size = 256): string | null {
+  const d = domainFrom(website);
+  return d ? `https://img.logo.dev/${d}?token=${LOGO_DEV.publishableKey}&size=${size}&format=png` : null;
+}
+
+// Browser: crop to the logo and make a plain white or near-white background transparent.
+// Works well on photos of signage and printed logos; the user can still adjust the crop.
+export function cleanLogo(img: HTMLImageElement | HTMLCanvasElement, threshold = 235): HTMLCanvasElement {
+  const w = img.width, h = img.height;
+  const src = document.createElement("canvas");
+  src.width = w; src.height = h;
+  const ctx = src.getContext("2d")!;
+  ctx.drawImage(img, 0, 0);
+  const data = ctx.getImageData(0, 0, w, h);
+  const px = data.data;
+  let minX = w, minY = h, maxX = -1, maxY = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4;
+    const light = px[i] > threshold && px[i + 1] > threshold && px[i + 2] > threshold;
+    if (light) px[i + 3] = 0;
+    else if (px[i + 3] > 0) {
+      if (x < minX) minX = x; if (y < minY) minY = y;
+      if (x > maxX) maxX = x; if (y > maxY) maxY = y;
+    }
+  }
+  ctx.putImageData(data, 0, 0);
+  if (maxX < 0) return src; // nothing found; leave as-is for manual crop
+  const pad = Math.round(Math.max(w, h) * 0.02);
+  const cx = Math.max(0, minX - pad), cy = Math.max(0, minY - pad);
+  const cw = Math.min(w, maxX + pad) - cx, ch = Math.min(h, maxY + pad) - cy;
+  const out = document.createElement("canvas");
+  out.width = cw; out.height = ch;
+  out.getContext("2d")!.drawImage(src, cx, cy, cw, ch, 0, 0, cw, ch);
+  return out;
+}
+
+// ===================== output =====================
+// Getting the finished document out: email, print (AirPrint or any printer), save to phone,
+// and a record of everything sent in the dashboard.
+
+
+export type Channel = "email" | "print" | "device" | "share";
+
+export interface SentRecord {
+  id: string;
+  documentId: string;
+  documentName: string;
+  contentHash: string; // proves which version went out
+  channel: Channel;
+  to?: string[];
+  at: string;
+}
+
+export class SentLog {
+  private items: SentRecord[] = [];
+  record(r: Omit<SentRecord, "id" | "at">): SentRecord {
+    const rec = { ...r, id: newId(), at: new Date().toISOString() };
+    this.items.unshift(rec);
+    return rec;
+  }
+  list(documentId?: string) {
+    return documentId ? this.items.filter((i) => i.documentId === documentId) : [...this.items];
+  }
+}
+
+export function validEmails(list: string[]): { ok: string[]; bad: string[] } {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+  const ok: string[] = [], bad: string[] = [];
+  for (const e of list.map((x) => x.trim()).filter(Boolean)) (re.test(e) ? ok : bad).push(e);
+  return { ok, bad };
+}
+
+// Email is sent from our server (e.g. Resend) with the PDF attached, so it arrives looking
+// professional and doesn't depend on the phone's mail app. This builds the payload.
+// Every PDF footer and email carries this. It's the cheapest marketing we have: every SWMS a subbie
+// sends lands on a builder's desk with a link to us.
+export function referralFooter(baseUrl: string): string {
+  return `Made with Safe Word · ${baseUrl.replace(/^https?:\/\//, "")}/start`;
+}
+
+export function emailPayload(opts: { to: string[]; fromName: string; documentName: string; siteAddress: string; pdfBase64: string; baseUrl: string }) {
+  return {
+    to: opts.to,
+    subject: `SWMS: ${opts.documentName} – ${opts.siteAddress}`,
+    text: `Hi,\n\nAttached is the signed SWMS for ${opts.siteAddress}.\n\n${opts.fromName}\n\n${referralFooter(opts.baseUrl)}`,
+    attachments: [{ filename: `${opts.documentName}.pdf`, content: opts.pdfBase64 }],
+  };
+}
+
+// Browser: save to phone. On iPhone this opens the share sheet (Save to Files, AirDrop, Messages…).
+export async function saveToDevice(pdf: Blob, filename: string): Promise<"shared" | "downloaded"> {
+  const file = new File([pdf], filename, { type: "application/pdf" });
+  const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
+  if (nav.canShare && nav.canShare({ files: [file] })) {
+    await navigator.share({ files: [file], title: filename });
+    return "shared";
+  }
+  const url = URL.createObjectURL(pdf);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  return "downloaded";
+}
+
+// Browser: print. Opens the system print dialog — AirPrint on iPhone/iPad, any installed printer elsewhere.
+export function printPdf(pdf: Blob): void {
+  const url = URL.createObjectURL(pdf);
+  const frame = document.createElement("iframe");
+  frame.style.position = "fixed"; frame.style.width = "0"; frame.style.height = "0"; frame.style.border = "0";
+  frame.src = url;
+  frame.onload = () => {
+    frame.contentWindow?.focus();
+    frame.contentWindow?.print();
+    setTimeout(() => { frame.remove(); URL.revokeObjectURL(url); }, 60000);
+  };
+  document.body.appendChild(frame);
+}
+
+// When the SWMS is emailed to the principal contractor, record the date it was provided.
+export function markProvided(values: Record<string, unknown>, providedFieldId: string, today: string): Record<string, unknown> {
+  return values[providedFieldId] ? values : { ...values, [providedFieldId]: today };
+}
+
+// Record keeping. A SWMS must be kept until the high-risk work is finished, and for at least
+// 2 years after a notifiable incident. Signed versions are never deleted by users, only archived.
+export const RETENTION = {
+  signedVersionsDeletable: false,
+  defaultYears: 7, // comfortably beyond the legal minimums; set with legal advice
+  notifiableIncidentMinYears: 2,
+};
+
+// ===================== seo =====================
+// SEO site generator for Safe Word.
+//
+// Strategy: win the searches tradies and builders actually make ("working at heights SWMS",
+// "SWMS for roofers", "what is a SWMS") with fast, genuinely useful pages that Google trusts.
+//  - Hub page:      /swms/                    what a SWMS is, the 18 activities, every trade
+//  - Activity pages: /swms/<activity>/         one per high-risk activity with a reviewed module
+//  - Trade pages:    /swms-for/<trade>/        one per trade, once its intro is reviewed
+//  - sitemap.xml, robots.txt, llms.txt (for AI search engines)
+// Quality gates (what keeps rankings long-term):
+//  - No page without founder-reviewed, unique content. Thin or duplicate pages hurt the whole site.
+//  - Every page shows who reviewed it and when (WebPage.reviewedBy / lastReviewed) — expertise signals.
+//  - Zero JavaScript, inline CSS, system fonts: near-instant loads and top Core Web Vitals on phones.
+//  - lintPages() fails the build on any SEO fault: title/description length, duplicate titles,
+//    missing canonical, broken internal links, placeholders, thin content, invalid structured data.
+// Note: Google stopped showing FAQ rich results in May 2026. FAQ markup is still included because
+// Google uses it to understand pages and other search engines may still display it.
+
+
+export interface SiteConfig {
+  brand: string;
+  baseUrl: string; // e.g. https://www.safeword.com.au — no trailing slash
+  checkPath: string; // free SWMS Check
+  signupPath: string;
+  ogImage: string; // 1200x630 share image path
+  reviewer: { name: string; credential: string };
+  // Trade photos that exist (slug -> true). Pages without one simply show no photo.
+  tradePhotos?: Record<string, boolean>;
+}
+
+export const SITE_DEFAULTS: SiteConfig = {
+  brand: "Safe Word",
+  baseUrl: "https://PASTE_DOMAIN",
+  checkPath: "/swms-check/",
+  signupPath: "/start/",
+  ogImage: "/og/safe-word-share.png",
+  reviewer: { name: "PASTE_REVIEWER_NAME", credential: "Diploma of Work Health and Safety" },
+};
+
+export const ACTIVITY_SEO: Record<string, { slug: string; name: string; plain?: string }> = {
+  "falls": { slug: "working-at-heights", name: "Working at Heights" , plain: "a risk of someone falling more than 2 metres (the height can differ by state)" },
+  "telco-tower": { slug: "telecommunication-tower", name: "Telecommunication Tower" , plain: "work on a telecommunication tower" },
+  "demolition": { slug: "demolition", name: "Demolition" , plain: "demolishing a load-bearing or structural element" },
+  "asbestos": { slug: "asbestos", name: "Asbestos" , plain: "work likely to disturb asbestos" },
+  "temp-support": { slug: "structural-alterations-propping", name: "Structural Alterations and Propping" , plain: "structural alterations that need temporary support" },
+  "confined-space": { slug: "confined-space", name: "Confined Space" , plain: "work in or near a confined space" },
+  "trench-tunnel": { slug: "trenching-excavation", name: "Trenching and Excavation" , plain: "a trench or shaft deeper than 1.5 metres, or a tunnel" },
+  "explosives": { slug: "explosives", name: "Explosives" , plain: "the use of explosives" },
+  "gas-mains": { slug: "gas-mains", name: "Gas Mains and Piping" , plain: "work on or near pressurised gas mains or piping" },
+  "chem-fuel-refrig": { slug: "fuel-refrigerant-lines", name: "Chemical, Fuel and Refrigerant Lines" , plain: "work on or near chemical, fuel or refrigerant lines" },
+  "energised-electrical": { slug: "electrical", name: "Electrical" , plain: "work on or near energised electrical installations" },
+  "contaminated-atmosphere": { slug: "flammable-atmosphere", name: "Contaminated and Flammable Atmospheres" , plain: "an area that may have a contaminated or flammable atmosphere" },
+  "tilt-up-precast": { slug: "tilt-up-precast", name: "Tilt-up and Precast" , plain: "tilt-up or precast concrete elements" },
+  "traffic-corridor": { slug: "traffic-roadworks", name: "Traffic and Roadworks" , plain: "work on or next to a road, railway or other traffic corridor in use" },
+  "mobile-plant": { slug: "mobile-plant", name: "Mobile Plant" , plain: "movement of powered mobile plant" },
+  "temp-extremes": { slug: "extreme-temperatures", name: "Extreme Temperatures" , plain: "areas with artificial extremes of temperature" },
+  "drowning": { slug: "work-near-water", name: "Work Near Water" , plain: "work in or near water with a risk of drowning" },
+  "diving": { slug: "diving", name: "Diving" , plain: "diving work" },
+};

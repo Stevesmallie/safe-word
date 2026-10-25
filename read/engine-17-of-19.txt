@@ -1,0 +1,120 @@
+=== safe-word-engine.ts — part 17 of 19. Join all parts in order to get the full file. ===
+
+  // ---- Specific replies ----
+  assert.equal(Replies.whoSigned(["Dave", "Mia"], ["Jack"]), "Dave and Mia have signed. Just Jack to go.");
+  assert.equal(Replies.whoSigned(["Dave", "Mia", "Jack"], []), "Everyone's signed: Dave, Mia and Jack.");
+  assert.equal(Replies.emailTo({ name: "Tom", company: "Hutchinson Builders", email: "t@h.com" }, "tom"), "Sending to Tom at Hutchinson Builders.");
+  assert.equal(Replies.emailTo(null, "Tom"), "I haven't got an email for Tom yet. What's their email?");
+  const fSite = f.fields.find((x) => x.id === "siteAddress")!;
+  const fRev = f.fields.find((x) => x.id === "reviewTrigger")!;
+  assert.equal(Replies.whatsLeft([fSite, fRev]), "Two to go: the site address, then the review bit.");
+  assert.equal(Replies.undone(fSite, "12 Main St"), "Put the site address back to 12 Main St.");
+  assert.equal(Replies.notHeard(2), "Still not catching it, it might be the noise. Want to type that one?");
+
+  // ---- Tone check across everything the app can say ----
+  const everything = [
+    ...f.fields.flatMap((x) => [x.voicePrompt, x.helpPrompt, x.nudge ?? ""]),
+    ...SYSTEM_LINES, OFFER_LINE,
+    ...troubleshoot(f, {}, { notCoveredCount: 2 }).map((i) => i.spoken),
+    troubleshootSummary([]), checkControl("x") ?? "", checkControl("be careful lads ok") ?? "",
+    Replies.whoSigned([], ["Jack"]), Replies.whoSigned([], []), Replies.crewLinkSent(3), Replies.crewMemberSigned("Mia", 1),
+    Replies.redoSignature(), Replies.emailTo({ name: "Tom" }, "Tom"), Replies.emailed({ name: "Tom" }), Replies.sendOptions(),
+    Replies.saved("SWMS"), Replies.printing(), Replies.whatsLeft([]), Replies.whatsLeft([fSite]), Replies.whatsLeft([fSite, fRev, fSite]),
+    Replies.readField(fSite, ""), Replies.readField(fSite, "12 Main St"), Replies.goTo(fSite), Replies.cleared(fSite),
+    Replies.changed(fSite, "x"), Replies.undone(fSite, ""), Replies.undone(fSite, "x"), Replies.noField("thing"),
+    Replies.newSwms(null), Replies.newSwms("Acme form"), Replies.sameAsLast("the Bowen job", ["Site address"]),
+    Replies.reused("the Bowen job", 6, 0), Replies.reused("the Bowen job", 6, 3), Replies.hazardsRebuilt(),
+    Replies.suggestion("x", "From your last job"), Replies.noSuggestion(), Replies.notHeard(1), Replies.notHeard(2),
+    Replies.typeMode(), Replies.voiceMode(0), Replies.voiceMode(3), Replies.quiet(), Replies.paused(), Replies.cancelled(),
+    Replies.voiceChanged("female"), Replies.voiceChanged("male"),
+  ];
+  for (const line of everything) for (const b of TONE_BANNED)
+    assert.ok(!line.toLowerCase().includes(b), `tone: "${line}" contains "${b}"`);
+
+  // ---- Pacing ----
+  const pace = new Pacer();
+  pace.on({ type: "fieldChanged", at: 0, fieldId: "workDescription" });
+  pace.on({ type: "speechStart", at: 100 });
+  assert.equal(pace.canSpeak(500), false); // never over the top of them
+  pace.on({ type: "speechEnd", at: 1000, longAnswerField: true });
+  assert.equal(pace.canSpeak(1000 + 1500), false); // thinking pause on a long answer
+  assert.equal(pace.canSpeak(1000 + PACING.endOfTurnLongMs), true);
+  pace.on({ type: "touch", at: 4000 });
+  assert.equal(pace.canSpeak(6000), false); // they're doing it themselves
+  assert.equal(pace.canSpeak(9100), true);
+  assert.equal(pace.showInfoGlow(9100), false);
+  assert.equal(pace.showInfoGlow(16100), true); // glow only, never a voice prompt
+  assert.equal(pace.shouldOfferSuggestion("workDescription"), false);
+  pace.on({ type: "missed", fieldId: "workDescription" });
+  pace.on({ type: "missed", fieldId: "workDescription" });
+  assert.equal(pace.shouldOfferSuggestion("workDescription"), true);
+  pace.on({ type: "offerMade", fieldId: "workDescription" });
+  assert.equal(pace.shouldOfferSuggestion("workDescription"), false); // once, ever
+  pace.on({ type: "quiet" });
+  assert.equal(pace.canSpeak(99999), false);
+
+  // ---- Typing mode, undo, reuse ----
+  let draft = newDraft(f, "Re-roof, Bowen", "text");
+  draft = setValue(draft, "siteAddress", "12 Main Street Bowen", "typed");
+  draft = setValue(draft, "siteAddress", "14 Main Street Bowen", "typed");
+  const u1 = undo(draft);
+  assert.equal(u1.draft.values.siteAddress, "12 Main Street Bowen");
+  assert.equal(undo(u1.draft).draft.values.siteAddress, undefined);
+  const oldJob = { ...newDraft(f, "Old job", "voice"), values: { ...values } };
+  const copy = copyFromOld(oldJob, f, { name: "New job", today: "2026-11-01" });
+  assert.equal(copy.draft.values.siteAddress, values.siteAddress);
+  assert.equal(copy.draft.values.datePrepared, "2026-11-01");
+  assert.equal(copy.draft.values.crewSignatures, undefined); // signatures never copied
+  assert.equal(copy.draft.values.hazards, undefined); // rebuilt from current reviewed content
+  assert.equal(copy.draft.sources.siteAddress, "copied");
+  const wiped = clearFields(copy.draft, ["siteAddress", "workDescription"]);
+  const left = remainingFields(f, wiped).map((x) => x.id);
+  assert.ok(left.includes("siteAddress") && left.includes("workDescription") && left.includes("crewSignatures"));
+  assert.equal(continueWith(wiped, "voice").mode, "voice");
+  const imp = importPreviousReport(f, [{ name: "Job Address", value: "3 Shute Harbour Rd" }, { name: "Box 9", value: "something" }], "Imported");
+  assert.equal(imp.draft.values.siteAddress, "3 Shute Harbour Rd");
+  assert.equal(imp.unmatched.length, 1);
+
+  // ---- ℹ️ suggestions ----
+  const ctxS = { today: "2026-11-01", profile: { businessName: "Test Roofing" }, pastJobs: [oldJob], brief: brief2, library };
+  assert.equal(suggestFor(f, {}, "businessName", ctxS)?.basis, "From your saved details");
+  assert.equal(suggestFor(f, {}, "siteAddress", ctxS)?.text, values.siteAddress);
+  assert.ok(suggestFor(f, {}, "workDescription", ctxS)!.text.includes("7 m"));
+  assert.equal(suggestFor(f, { siteAddress: values.siteAddress }, "responsiblePerson", ctxS)?.basis, "Same as last time at this site");
+  assert.equal(suggestFor(f, {}, "hazards", { ...ctxS, notCoveredItem: "heat stress" }), null); // never guesses safety content
+  assert.ok(suggestFor(f, {}, "hazards", { ...ctxS, notCoveredItem: "roof edge" }) !== null);
+
+  // ---- Sign everywhere ----
+  const coForm = [{ id: "prep", kind: "signature", signer: "author" as const }, { id: "ack", kind: "signature", signer: "author" as const }, { id: "crew", kind: "signature", signer: "crew" as const }, { id: "addr", kind: "text" }];
+  const all = applyToAllMyFields(vault, coForm, { actingUserId: "dave", as: "author", role: "Roofer", documentHash: "h", confirmedTap: true });
+  assert.deepEqual(all.map((x) => x.fieldId), ["prep", "ack"]);
+  assert.throws(() => applyToAllMyFields(vault, coForm, { actingUserId: "dave", as: "author", role: "Roofer", documentHash: "h", confirmedTap: false }));
+
+  // ---- Required SWMS fields now in the template ----
+  for (const k of ["businessAddress", "controlMonitoring", "dateProvided"]) assert.ok(f.fields.some((x) => x.key === k), k);
+  assert.equal(markProvided({}, "dateProvided", "2026-11-02").dateProvided, "2026-11-02");
+  assert.equal(markProvided({ dateProvided: "2026-11-01" }, "dateProvided", "2026-11-02").dateProvided, "2026-11-01");
+
+  // ---- Free SWMS Check ----
+  const generic = "SAFE WORK METHOD STATEMENT. Company: [insert name]. Hazards: slips. Controls: be careful. Date: ____";
+  const rep = checkExistingSwms(generic, brief2, library);
+  assert.ok(rep.items.some((i) => i.label === "Template text left in"));
+  assert.ok(rep.items.some((i) => i.label.startsWith("Risk of a person falling") && i.status === "missing"));
+  assert.ok(rep.items.some((i) => i.label === "Site-specific" && i.status === "worth-a-look"));
+  assert.ok(rep.summary.startsWith("Had a read through.") && rep.disclaimer.includes("not a compliance assessment"));
+  for (const line of [rep.summary, rep.disclaimer, ...rep.items.map((i) => i.note)]) for (const b of TONE_BANNED)
+    assert.ok(!line.toLowerCase().includes(b), `tone: "${line}" contains "${b}"`);
+
+  // ---- Content console ----
+  const draftMod = { ...library[1], status: "draft" as const, reviewedBy: undefined, reviewedAt: undefined };
+  assert.ok(reviewBlockers(draftMod).some((b) => b.includes("code of practice")));
+  const ppeOnly = { ...library[0], hazards: [{ ...library[0].hazards[0], controls: [{ id: "p", text: "Wear harness", level: "ppe" as const }] }] };
+  assert.ok(reviewBlockers(ppeOnly).some((b) => b.includes("higher-order")));
+  assert.equal(markReviewed(library[0], "Founder", "2026-10-25").status, "reviewed");
+  const edited2 = editModule(library[0], { triggers: ["roof", "gutter"] });
+  assert.ok(edited2.status === "draft" && edited2.version === 2 && select(brief2, [edited2]).modules.length === 0);
+  assert.ok(jurisdictionNotice("vic") !== null && jurisdictionNotice("QLD") === null);
+
+  // ---- Portable hashing matches the standard ----
+  assert.equal(sha256Hex("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+  assert.equal(sha256Hex(""), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");

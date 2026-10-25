@@ -1,0 +1,165 @@
+=== safe-word-engine.ts — part 10 of 19. Join all parts in order to get the full file. ===
+
+
+export type Role = "owner" | "supervisor" | "worker";
+
+export interface Membership {
+  userId: string;
+  companyId: string;
+  role: Role;
+  status: "active" | "removed";
+  noticeVersionAccepted?: number;
+  removedAt?: string;
+  removedBy?: string;
+  privateNote?: string; // optional, owner-only; never shown to the person, never required
+}
+
+export interface CompanyNotice { companyName: string; version: number; text: string }
+
+export function defaultNotice(companyName: string, version = 1): CompanyNotice {
+  return {
+    companyName,
+    version,
+    text:
+      `These forms and documents are confidential and belong to ${companyName}. ` +
+      `They're provided only for use on ${companyName} work while ${companyName} authorises you to use them. ` +
+      `They're not to be copied, shared or used for any other business. ` +
+      `${companyName} can remove access at any time, and completed SWMS stay with ${companyName} as safety records.`,
+  };
+}
+
+export interface AuditEntry { at: string; companyId: string; userId: string; by: string; event: "granted" | "accepted-notice" | "removed" | "restored" | "drafts-transferred" }
+
+export class CompanyAccess {
+  private members: Membership[] = [];
+  readonly log: AuditEntry[] = [];
+
+  constructor(private notice: CompanyNotice, private companyId: string) {}
+
+  grant(userId: string, role: Role, by: string, at: string): Membership {
+    const existing = this.members.find((m) => m.userId === userId);
+    if (existing) {
+      Object.assign(existing, { role, status: "active", removedAt: undefined, removedBy: undefined });
+      this.log.push({ at, companyId: this.companyId, userId, by, event: "restored" });
+      return existing;
+    }
+    const m: Membership = { userId, companyId: this.companyId, role, status: "active" };
+    this.members.push(m);
+    this.log.push({ at, companyId: this.companyId, userId, by, event: "granted" });
+    return m;
+  }
+
+  acceptNotice(userId: string, at: string): void {
+    const m = this.get(userId);
+    if (!m || m.status !== "active") throw new Error("No access to this company's paperwork.");
+    m.noticeVersionAccepted = this.notice.version;
+    this.log.push({ at, companyId: this.companyId, userId, by: userId, event: "accepted-notice" });
+  }
+
+  updateNotice(n: CompanyNotice): void {
+    if (n.version <= this.notice.version) throw new Error("A changed notice needs a new version number.");
+    this.notice = n;
+  }
+
+  currentNotice(): CompanyNotice { return this.notice; }
+
+  get(userId: string): Membership | undefined { return this.members.find((m) => m.userId === userId); }
+
+  // Can this person open this company form right now?
+  canUseForm(userId: string, form: FormTemplate): { ok: boolean; reason?: "removed" | "not-member" | "accept-notice" } {
+    if (form.kind === "generic") return { ok: true };
+    if (form.companyId !== this.companyId) return { ok: false, reason: "not-member" };
+    const m = this.get(userId);
+    if (!m) return { ok: false, reason: "not-member" };
+    if (m.status === "removed") return { ok: false, reason: "removed" };
+    if (m.noticeVersionAccepted !== this.notice.version) return { ok: false, reason: "accept-notice" };
+    return { ok: true };
+  }
+
+  canDownloadBlank(userId: string): boolean {
+    const m = this.get(userId);
+    return !!m && m.status === "active" && m.role === "owner";
+  }
+
+  // Remove access. Owner-only. Drafts move to `transferTo` so nothing in progress is lost.
+  remove(userId: string, by: string, at: string, drafts: DraftDoc[], transferTo: string, privateNote?: string) {
+    const actor = this.get(by);
+    if (!actor || actor.role !== "owner" || actor.status !== "active") throw new Error("Only the owner can remove access.");
+    if (userId === by) throw new Error("An owner can't remove their own access.");
+    const m = this.get(userId);
+    if (!m) throw new Error("That person isn't on this company's account.");
+    Object.assign(m, { status: "removed", removedAt: at, removedBy: by, privateNote });
+    this.log.push({ at, companyId: this.companyId, userId, by, event: "removed" });
+    const moved = drafts.filter((d) => (d as DraftDoc & { ownerId?: string }).ownerId === userId);
+    if (moved.length) this.log.push({ at, companyId: this.companyId, userId: transferTo, by, event: "drafts-transferred" });
+    return {
+      membership: m,
+      transferred: moved.map((d) => ({ ...d, ownerId: transferTo })),
+      messageForPerson: `Your access to ${this.notice.companyName}'s paperwork has ended. Your own saved signature and the Safe Word template are still yours to use.`,
+      messageForOwner: `Done. They no longer have access to ${this.notice.companyName}'s paperwork.${moved.length ? ` ${moved.length} draft${moved.length === 1 ? "" : "s"} moved to you.` : ""}`,
+    };
+  }
+}
+
+export const OFFLINE_CHECK_IN_DAYS = 7;
+
+// Offline copies of company forms stop working if the phone hasn't checked in recently.
+export function offlineCopyValid(lastCheckInIso: string, nowIso: string): boolean {
+  return Date.parse(nowIso) - Date.parse(lastCheckInIso) <= OFFLINE_CHECK_IN_DAYS * 86400000;
+}
+
+// Footer on every PDF made from company paperwork.
+export function companyFooter(companyName: string): string {
+  return `Prepared on ${companyName} paperwork. Confidential to ${companyName}.`;
+}
+
+// ---------- Worker uploads: advisory, never a block ----------
+// Anyone can upload any document into their own account. If it looks like another business's
+// paperwork, they get a one-line heads-up and choose. Their answer stays in their own account;
+// nobody is told. Shown once per document.
+
+const ABN_RE = /\b(?:abn[:\s]*)?(\d{2}\s?\d{3}\s?\d{3}\s?\d{3})\b/i;
+
+export function otherCompanyIn(docText: string, own: { businessName?: string; abn?: string }): string | null {
+  const m = docText.match(ABN_RE);
+  const docAbn = m ? m[1].replace(/\s/g, "") : null;
+  const ownAbn = own.abn?.replace(/\s/g, "");
+  if (docAbn && ownAbn && docAbn === ownAbn) return null;
+  const named = docText.match(/(?:company|business|pcbu|contractor)(?: name)?[:\s]+([A-Z][\w&'. -]{2,60}?(?:Pty Ltd|Ltd|Group|Services|Constructions?|Builders?|Roofing|Electrical|Plumbing)?)\s*(?:\n|ABN|$)/i);
+  const name = named?.[1]?.trim();
+  if (name && own.businessName && name.toLowerCase().includes(own.businessName.toLowerCase())) return null;
+  if (docAbn && docAbn !== ownAbn) return name || "another company";
+  return null;
+}
+
+export function uploadAdvisory(companyName: string): { text: string; options: ["Continue", "Cancel"] } {
+  const who = companyName === "another company" ? "another company's" : companyName.endsWith("s") ? `${companyName}'` : `${companyName}'s`;
+  return { text: `Heads up: this looks like ${who} paperwork. Using it may need their OK. Continue?`, options: ["Continue", "Cancel"] };
+}
+
+// ===================== swmscheck =====================
+// The free SWMS Check (lead magnet): someone uploads their existing SWMS and describes a job.
+// We report, in a friendly way, what looks covered and what we couldn't find.
+// It's a quick automated read, not a compliance assessment, and it says so.
+
+
+export interface CheckItem { label: string; status: "covered" | "missing" | "worth-a-look"; note: string }
+export interface CheckReport { items: CheckItem[]; covered: number; total: number; summary: string; disclaimer: string }
+
+// What a SWMS should include (WHS Regulations; WorkSafe Queensland and Safe Work Australia guidance).
+const ELEMENTS: { label: string; any: RegExp; note: string }[] = [
+  { label: "Business name and ABN", any: /\babn\b|a\.b\.n|australian business number/i, note: "The business doing the work and its ABN." },
+  { label: "Business address", any: /\baddress\b/i, note: "The business's address." },
+  { label: "Principal contractor", any: /principal contractor|head contractor|\bbuilder\b/i, note: "Who's running the site, for construction projects." },
+  { label: "Site address", any: /site address|work location|job address|location of work|project address/i, note: "Where the work is happening." },
+  { label: "High-risk construction work identified", any: /high[ -]risk|hrcw/i, note: "Which of the high-risk activities apply." },
+  { label: "Hazards and risks", any: /hazard/i, note: "What could hurt someone, and how." },
+  { label: "Control measures", any: /control/i, note: "What's being done about each hazard." },
+  { label: "How controls are put in place and checked", any: /monitor|implement|inspect|check(ed)? (daily|before|at)/i, note: "Who checks the controls, and when." },
+  { label: "Review", any: /review/i, note: "When the SWMS gets reviewed, e.g. if the work or conditions change." },
+  { label: "Person responsible", any: /responsible|supervisor|leading hand/i, note: "Who makes sure it's followed on site." },
+  { label: "Dates", any: /\bdate\b/i, note: "When it was prepared (and given to the builder)." },
+  { label: "Worker sign-off", any: /sign(ed|ature)?|acknowledg/i, note: "The crew confirming they've read it." },
+];
+
+const GENERIC_SIGNS = /\[insert|insert (name|address|here)|<name>|xx\/xx|lorem|example only|template/i;

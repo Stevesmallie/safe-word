@@ -1,0 +1,106 @@
+=== safe-word-screens.html — part 6 of 9. Join all parts in order to get the full file. ===
+      <div class="hrcw"><div class="tape tape--card"></div><div><span class="iconbtn" style="color:var(--hv)"><svg class="ico"><use href="#i-alert"/></svg></span><span><strong>High-risk construction work</strong><small>Risk of a person falling more than 2 m</small></span></div></div>
+      <div class="hz-list" id="hzList">
+        <div class="hz">
+          <div class="hz-top"><h3>Falling from the roof edge</h3><span class="risk">High</span></div>
+          <div class="ctrl"><svg class="ico"><use href="#i-check"/></svg><span><em>Engineering</em>Perimeter scaffold with guardrails, mid-rails and toe boards, put up and tagged by a licensed scaffolder.</span></div>
+          <div class="ctrl"><svg class="ico"><use href="#i-check"/></svg><span><em>Admin</em>Scaffold tag checked before work starts each day.</span></div>
+        </div>
+        <div class="hz">
+          <div class="hz-top"><h3>Falling through the roof</h3><span class="risk">High</span></div>
+          <div class="ctrl"><svg class="ico"><use href="#i-check"/></svg><span><em>Engineering</em>Safety mesh checked and left in place under the sheets.</span></div>
+          <div class="ctrl"><svg class="ico"><use href="#i-check"/></svg><span><em>Admin</em>Old sheets come off one bay at a time. Walk on purlin lines only.</span></div>
+        </div>
+        <div class="hz">
+          <div class="hz-top"><h3>Sheets catching the wind</h3><span class="risk risk--m">Medium</span></div>
+          <div class="ctrl"><svg class="ico"><use href="#i-check"/></svg><span><em>Admin</em>Sheets strapped down on the roof. Handling stops if the wind makes them hard to hold.</span></div>
+        </div>
+        <div class="hz hz--amber" id="hzAmber">
+          <p class="label" style="display:flex;gap:8px;align-items:center"><svg class="ico" style="width:18px;height:18px"><use href="#i-alert"/></svg>Not covered yet</p>
+          <h3>Overhead power line</h3>
+          <p>You mentioned the street side. If the service line runs to that eave, it's worth a control. Or keep it as is if it's not near the work.</p>
+          <div class="hz-actions"><button class="btn btn--hv btn--sm" data-act="add-power"><svg class="ico" style="width:20px;height:20px"><use href="#i-plus"/></svg>Add a control</button><button class="btn btn--ghost btn--sm" data-act="keep-power">Keep as is</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="foot"><button class="btn btn--hv btn--block" data-go="readover">Read it over</button></div>
+  </section>
+
+  <!-- ===================== 5. READ-OVER ===================== -->
+  <section class="screen" data-screen="readover" aria-label="Read-over">
+    <div class="tape tape--top"></div>
+    <div class="bar">
+      <button class="iconbtn" data-back aria-label="Back"><svg class="ico"><use href="#i-back"/></svg></button>
+      <div class="bar-title"><p class="eyebrow">Roof sheet replacement</p><h1>Read-over</h1></div>
+    </div>
+    <div class="scroll">
+      <div class="ro-head">
+        <div class="ring"><svg viewBox="0 0 84 84"><circle class="bg" cx="42" cy="42" r="36"/><circle class="fg" id="ringFg" cx="42" cy="42" r="36" stroke-dasharray="226.2" stroke-dashoffset="28.3"/></svg><span><span class="num" id="ringNum">14<small>of 16</small></span></span></div>
+        <div><h1 class="display d-md">Had a read through.</h1><p class="muted" style="margin:8px 0 0;font-size:16px">Looks good. Two spots are still blank. Both are quick, or keep it as is.</p></div>
+      </div>
+      <div class="ro-items">
+        <div class="ro" id="ro1">
+          <h3>How the controls get checked</h3>
+          <p>Who checks the scaffold and edge protection, and when?</p>
+          <div class="suggest"><em>Most people say</em>Dave Brown checks the scaffold tag and edge protection at the start of each day.</div>
+          <div class="ro-actions"><button class="btn btn--hv btn--sm" data-ro="ro1" data-v="done">Use that</button><button class="btn btn--ghost btn--sm" data-act="say"><svg class="ico" style="width:20px;height:20px"><use href="#i-mic"/></svg>Say it</button><button class="btn--text" data-ro="ro1" data-v="kept">Keep as is</button></div>
+          <div class="result"><svg class="ico" style="width:20px;height:20px"><use href="#i-check"/></svg><span></span></div>
+        </div>
+        <div class="ro" id="ro2">
+          <h3>When this gets reviewed</h3>
+          <p>When would you look at this again?</p>
+          <div class="suggest"><em>Most people say</em>Reviewed if the work, the weather or the site changes, or after any incident.</div>
+          <div class="ro-actions"><button class="btn btn--hv btn--sm" data-ro="ro2" data-v="done">Use that</button><button class="btn btn--ghost btn--sm" data-act="say"><svg class="ico" style="width:20px;height:20px"><use href="#i-mic"/></svg>Say it</button><button class="btn--text" data-ro="ro2" data-v="kept">Keep as is</button></div>
+          <div class="result"><svg class="ico" style="width:20px;height:20px"><use href="#i-check"/></svg><span></span></div>
+        </div>
+        <div class="ro-ok"><svg class="ico"><use href="#i-check"/></svg><span>Site, work, high-risk work, hazards and the people responsible are all in.</span></div>
+      </div>
+    </div>
+    <div class="foot"><button class="btn btn--hv btn--block" data-go="sign">Sign off</button></div>
+  </section>
+
+  <!-- ===================== 6. SIGN ===================== -->
+  <section class="screen" data-screen="sign" aria-label="Sign off">
+    <div class="tape tape--top"></div>
+    <div class="bar">
+      <button class="iconbtn" data-back aria-label="Back"><svg class="ico"><use href="#i-back"/></svg></button>
+      <div class="bar-title"><p class="eyebrow">Roof sheet replacement</p><h1>Sign off</h1></div>
+    </div>
+    <div class="scroll" id="signScroll">
+      <div class="confirm" id="allSigned">
+        <div class="tape tape--card"></div>
+        <div class="confirm-body"><span class="tick"><svg class="ico"><use href="#i-check"/></svg></span><div><h3>Everyone's signed</h3><p class="num" id="lockLine">3 of 3 · locked to this version</p></div></div>
+      </div>
+      <div class="me-card" id="meCard">
+        <div style="display:flex;justify-content:space-between;align-items:center"><p class="label">Your signature</p><button class="btn--text" style="font-size:15px;color:var(--blue)" data-act="soon">Change</button></div>
+        <div class="me-sig"><canvas id="meSig"></canvas></div>
+        <button class="btn btn--hv btn--block" data-act="sign-me"><svg class="ico"><use href="#i-pen"/></svg>Sign both places</button>
+      </div>
+      <div class="sign-doc">
+        <article class="paper">
+          <div class="sec" style="padding-top:0">Prepared by</div>
+          <div class="sgn" id="s-author"><div><b>Dave Brown</b><small>Supervisor, Brown Roofing</small></div><div class="slot"><canvas></canvas></div></div>
+          <div class="sec">Crew sign-on · I've read and understood this SWMS</div>
+          <div class="sgn" id="s-dave"><div><b>Dave Brown</b><small>Roofer</small></div><div class="slot"><canvas></canvas></div></div>
+          <div class="sgn" id="s-mia"><div><b>Mia Tran</b><small>Roofer</small></div><div class="slot"><canvas></canvas><button class="pp" data-pass="mia"><svg class="ico" style="width:16px;height:16px"><use href="#i-phone"/></svg>Pass phone</button></div></div>
+          <div class="sgn" id="s-jack"><div><b>Jack Wilson</b><small>Apprentice</small></div><div class="slot"><canvas></canvas><button class="pp" data-pass="jack"><svg class="ico" style="width:16px;height:16px"><use href="#i-phone"/></svg>Pass phone</button></div></div>
+        </article>
+      </div>
+    </div>
+    <div class="foot"><button class="btn btn--hv btn--block" id="toSend" data-go="send" disabled>Send it</button></div>
+    <div class="scrim" data-act="close-sheet"></div>
+    <div class="sheet" id="sheetPass" role="dialog" aria-label="Crew signature">
+      <div class="grab"></div>
+      <div class="handover"><p class="eyebrow">Hand the phone to</p><div class="bigname" id="passName">Mia</div><p class="fine" style="font-size:16px;max-width:30ch">Have a read of the SWMS above. If you're good with it, sign below.</p></div>
+      <div class="sigpad" id="padPass"><canvas></canvas><div class="base"></div><div class="hint">Sign here</div><button class="clear" type="button">Clear</button></div>
+      <button class="btn btn--hv btn--block" id="passGo" disabled data-act="pass-sign">I've read it, sign</button>
+      <button class="btn--text" style="align-self:center" data-act="close-sheet">Not now</button>
+    </div>
+  </section>
+
+  <!-- ===================== 7. SEND ===================== -->
+  <section class="screen" data-screen="send" aria-label="Send">
+    <div class="tape tape--top"></div>
+    <div class="bar">
+      <button class="iconbtn" data-back aria-label="Back"><svg class="ico"><use href="#i-back"/></svg></button>
+      <div class="bar-title"><p class="eyebrow">Roof sheet replacement</p><h1>Send</h1></div>

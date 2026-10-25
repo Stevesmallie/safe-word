@@ -1,0 +1,149 @@
+=== safe-word-engine.ts — part 3 of 19. Join all parts in order to get the full file. ===
+
+// The name used when talking about a field: "the review bit", not "the when this SWMS will be reviewed".
+export const spoken = (f: FieldDef) => f.spokenName ?? f.label.charAt(0).toLowerCase() + f.label.slice(1);
+
+export const GENERIC_SWMS: FormTemplate = {
+  id: "generic-swms",
+  name: "Safe Word SWMS",
+  kind: "generic",
+  version: 1,
+  createdAt: "2026-10-25",
+  fields: [
+    // Prompt style: a short question a good offsider would ask. Help is only spoken when asked for.
+    F({ id: "logo", key: "logo", label: "Company logo", kind: "logo", required: false,
+      voicePrompt: "Add your logo?",
+      helpPrompt: "Snap a photo of it, upload one, or find it from your website." }),
+    F({ id: "businessName", key: "businessName", label: "Business name", kind: "text", required: true,
+      voicePrompt: "Business name?",
+      helpPrompt: "Whatever's on your invoices." }),
+    F({ id: "abn", key: "abn", label: "ABN", kind: "text", required: true,
+      voicePrompt: "And the ABN?",
+      helpPrompt: "Eleven digits. Groups are fine." }),
+    F({ id: "businessAddress", key: "businessAddress", label: "Business address", kind: "text", required: true, minWords: 3,
+      voicePrompt: "And the business address?",
+      helpPrompt: "Your business's street address. It goes on every SWMS.",
+      nudge: "The business address looks a bit short. What's the suburb?" }),
+    F({ id: "principalContractor", key: "principalContractor", label: "Principal contractor", spokenName: "builder", kind: "text", required: false,
+      voicePrompt: "Who's the builder on this one?",
+      helpPrompt: "The principal contractor running the site. Say none if there isn't one." }),
+    F({ id: "siteAddress", key: "siteAddress", label: "Site address", kind: "text", required: true, minWords: 3,
+      voicePrompt: "Site address?",
+      helpPrompt: "Street and suburb's fine.",
+      nudge: "The site address looks a bit short. What's the suburb?" }),
+    F({ id: "workDescription", key: "workDescription", label: "Work activity", spokenName: "job description", kind: "longtext", required: true, minWords: 8, whsPhrase: true,
+      voicePrompt: "What's the job?",
+      helpPrompt: "Talk it through like you'd tell your offsider: the task, the gear, how many of you.",
+      nudge: "The job description's a bit light. What gear are you using, and how many of you?" }),
+    F({ id: "hrcw", key: "hrcw", label: "High-risk construction work", spokenName: "high-risk work", kind: "hrcw", required: true,
+      voicePrompt: "Here's the high-risk work I've picked up. All good?",
+      helpPrompt: "Worked out from what you told me. Tell me if anything's missing." }),
+    F({ id: "hazards", key: "hazards", label: "Hazards and controls", kind: "hazards", required: true,
+      voicePrompt: "Hazards are in. Just need you on the flagged ones.",
+      helpPrompt: "What'll you do about it? Something like: stop work if the wind picks up." }),
+    F({ id: "responsiblePerson", key: "responsiblePerson", label: "Person responsible for monitoring controls", spokenName: "person keeping an eye on the controls", kind: "text", required: true,
+      voicePrompt: "Who's keeping an eye on the controls?",
+      helpPrompt: "Usually the leading hand or supervisor." }),
+    F({ id: "controlMonitoring", key: "controlMonitoring", label: "How the controls will be checked", spokenName: "control checks", kind: "longtext", required: true, minWords: 6, whsPhrase: true,
+      voicePrompt: "How will the controls get checked on site?",
+      helpPrompt: "Something like: leading hand checks edge protection and harnesses at the start of each day and after any change.",
+      nudge: "The control checks are a bit light. Who checks what, and when?" }),
+    F({ id: "reviewTrigger", key: "reviewTrigger", label: "When this SWMS will be reviewed", spokenName: "review bit", kind: "longtext", required: true, minWords: 6, whsPhrase: true,
+      voicePrompt: "When should this get reviewed?",
+      helpPrompt: "'If the job, crew or conditions change' covers it.",
+      nudge: "The review part's a bit light. Something like 'if the job, crew or conditions change' would cover it." }),
+    F({ id: "datePrepared", key: "datePrepared", label: "Date prepared", spokenName: "date", kind: "date", required: true,
+      voicePrompt: "Today's date okay?",
+      helpPrompt: "That's the date it was prepared." }),
+    F({ id: "dateProvided", key: "dateProvided", label: "Date given to principal contractor", spokenName: "date it went to the builder", kind: "date", required: false,
+      voicePrompt: "When did the builder get a copy?",
+      helpPrompt: "Fills in by itself when you email it to the builder." }),
+    F({ id: "authorSignature", key: "authorSignature", label: "Prepared by (signature)", spokenName: "your signature", kind: "signature", required: true, signer: "author",
+      voicePrompt: "Ready to sign?",
+      helpPrompt: "One tap puts your saved signature on." }),
+    F({ id: "crewSignatures", key: "crewSignatures", label: "Crew sign-off", spokenName: "crew sign-off", kind: "signature", required: true, signer: "crew",
+      voicePrompt: "Crew's turn to sign.",
+      helpPrompt: "Pass the phone round or send the link. Everyone signs with their own." }),
+  ],
+};
+
+// ---------- Company paperwork ----------
+
+// Field names commonly found on company SWMS forms, mapped to what they mean.
+const SYNONYMS: Record<StandardKey, string[]> = {
+  businessName: ["company", "business name", "contractor name", "pcbu", "employer", "trading name"],
+  abn: ["abn", "a.b.n", "business number"],
+  businessAddress: ["business address", "company address", "postal address"],
+  principalContractor: ["principal contractor", "head contractor", "builder", "main contractor"],
+  siteAddress: ["site address", "job address", "work location", "project address", "site location", "location of work"],
+  workDescription: ["work activity", "job description", "task description", "scope of work", "description of work", "activity"],
+  hrcw: ["high risk", "hrcw", "high-risk construction"],
+  hazards: ["hazard", "risk", "control measure", "controls"],
+  responsiblePerson: ["responsible person", "person responsible", "supervisor name", "monitoring"],
+  datePrepared: ["date prepared", "date", "issue date"],
+  controlMonitoring: ["monitor", "monitoring", "how controls", "implemented", "implementation"],
+  dateProvided: ["date provided", "date given", "provided to principal", "date issued to"],
+  reviewTrigger: ["review", "review date", "revision"],
+  authorSignature: ["prepared by", "author signature", "signature of person preparing"],
+  crewSignatures: ["worker signature", "employee signature", "crew", "acknowledgement", "sign on", "workers"],
+  supervisorSignature: ["supervisor signature", "approved by", "authorised by", "manager signature"],
+  logo: ["logo"],
+};
+
+export interface DetectedField {
+  name: string; // field name read from the PDF form, or label text the user tapped
+  kind: "text" | "checkbox" | "signature";
+  page: number;
+  rect: { x: number; y: number; w: number; h: number };
+}
+
+const lc = (s: string) => s.toLowerCase().replace(/[_\-.]+/g, " ").replace(/\s+/g, " ").trim();
+
+export function guessKey(name: string): StandardKey | null {
+  const n = lc(name);
+  let best: { key: StandardKey; len: number } | null = null;
+  for (const [key, words] of Object.entries(SYNONYMS) as [StandardKey, string[]][]) {
+    for (const w of words) {
+      if (n.includes(w) && (!best || w.length > best.len)) best = { key, len: w.length };
+    }
+  }
+  return best ? best.key : null;
+}
+
+// Turns the fields found on an uploaded PDF into a guided Safe Word form.
+// Fields we can't place are returned as `unmatched` so the user can label them by voice or tap, once.
+export function buildCompanyForm(companyId: string, name: string, fileUrl: string, detected: DetectedField[]) {
+  const fields: FieldDef[] = [];
+  const unmatched: DetectedField[] = [];
+  for (const d of detected) {
+    const key = guessKey(d.name);
+    const base = GENERIC_SWMS.fields.find((f) => f.key === key);
+    if (!key || !base) {
+      unmatched.push(d);
+      continue;
+    }
+    fields.push({
+      ...base,
+      id: `${key}-${fields.length}`,
+      label: d.name,
+      kind: d.kind === "signature" || base.kind === "signature" ? "signature" : base.kind,
+      place: { page: d.page, ...d.rect },
+    });
+  }
+  const form: FormTemplate = {
+    id: newId(), name, kind: "company", companyId, fileUrl, fields, version: 1, createdAt: new Date().toISOString(),
+  };
+  return { form, unmatched };
+}
+
+// The user labels an unmatched field ("that box is the site address").
+export function labelField(form: FormTemplate, d: DetectedField, key: StandardKey): FormTemplate {
+  const base = GENERIC_SWMS.fields.find((f) => f.key === key)!;
+  return {
+    ...form,
+    version: form.version + 1,
+    fields: [...form.fields, { ...base, id: `${key}-${form.fields.length}`, label: d.name, place: { page: d.page, ...d.rect } }],
+  };
+}
+
+// ---------- Paperwork dashboard ----------

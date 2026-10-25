@@ -1,0 +1,148 @@
+=== safe-word-screens.html — part 1 of 9. Join all parts in order to get the full file. ===
+<title>Safe Word Screens</title>
+<meta name="description" content="Safe Word app screens: the design system and every screen, built in code.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* ==========================================================================
+   SAFE WORD — DESIGN SYSTEM
+   Layout concept: a dark site-morning app. Real photos up top, the paperwork
+   as a white sheet of paper, hi-vis yellow only for the one thing to tap next.
+   ========================================================================== */
+:root{
+  color-scheme: dark;
+  /* colour */
+  --bg:#0B0F14;          /* app background, graphite */
+  --s1:#121820;          /* raised surface */
+  --s2:#1A222D;          /* card / input */
+  --s3:#232D3A;          /* pressed / border-strong */
+  --line:rgba(214,228,240,.09);
+  --text:#F2F5F8;
+  --muted:#9AA6B2;
+  --faint:#66727F;
+  --hv:#E3FF00;          /* hi-vis: primary action only */
+  --hv-ink:#0B0F14;      /* text on hi-vis */
+  --hv-soft:rgba(227,255,0,.14);
+  --blue:#4D8BFF;        /* links, info */
+  --amber:#FFB020;       /* needs attention */
+  --amber-soft:rgba(255,176,32,.12);
+  --green:#3DDC84;       /* signed / done */
+  --green-soft:rgba(61,220,132,.12);
+  --paper:#FAFAF6;       /* the SWMS sheet */
+  --paper-ink:#161C24;
+  --paper-mute:#6B7480;
+  --paper-line:#DCDfE3;
+  --sig-ink:#1E2F7A;     /* pen ink on paper */
+  --mark:rgba(227,255,0,.55); /* highlighter on paper */
+  /* type */
+  --f-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  /* shape + motion */
+  --r-sm:10px; --r-md:16px; --r-lg:24px;
+  --tap:56px;
+  --ease:cubic-bezier(.2,.7,.2,1);
+  --t:260ms;
+}
+
+/* ---------- base ---------- */
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:400 17px/1.45 var(--f-body);-webkit-font-smoothing:antialiased;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;-webkit-tap-highlight-color:transparent}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--hv);outline-offset:3px;border-radius:12px}
+a{color:var(--blue)}
+img{max-width:100%;display:block}
+svg{display:block}
+.ico{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- type scale ---------- */
+.display{font-family:var(--f-display);font-weight:800;text-transform:uppercase;letter-spacing:.005em;line-height:.92;margin:0;text-wrap:balance}
+.d-xl{font-size:clamp(58px,17vw,76px)}
+.d-lg{font-size:44px}
+.d-md{font-size:32px;line-height:.95}
+.d-sm{font-size:24px;line-height:1}
+.eyebrow{font:600 13px/1.2 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0}
+.label{font:700 13px/1.2 var(--f-body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0}
+.lede{font-size:18px;color:#D4DBE2;margin:0;max-width:34ch}
+.muted{color:var(--muted)}
+.fine{font-size:14px;color:var(--muted);margin:0;line-height:1.45}
+.hv{color:var(--hv)}
+.num{font-variant-numeric:tabular-nums}
+
+/* ---------- app frame ---------- */
+.app{position:relative;height:100%;width:100%;max-width:440px;margin:0 auto;overflow:hidden;background:var(--bg);isolation:isolate}
+@media (min-width:640px){
+  body{display:grid;place-items:center;background:#05080B}
+  .app{height:min(100%,920px);border-radius:32px;box-shadow:0 0 0 1px var(--line),0 50px 140px rgba(0,0,0,.65)}
+}
+/* subtle film grain over everything, so dark surfaces never look flat-digital */
+.app::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:90;opacity:.06;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+.screen{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg);isolation:isolate;
+  opacity:0;visibility:hidden;transform:translateX(28px);
+  transition:opacity var(--t) var(--ease),transform var(--t) var(--ease),visibility 0s linear var(--t)}
+.screen.on{opacity:1;visibility:visible;transform:none;transition:opacity var(--t) var(--ease),transform var(--t) var(--ease)}
+.screen.back-out{transform:translateX(-28px)}
+.scroll{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.pad-x{padding-left:20px;padding-right:20px}
+
+/* ---------- HI-VIS TAPE (signature brand detail) ----------
+   Used in exactly three places: top of every screen, section divider,
+   top edge of confirmation cards. Never on buttons, never vertical. */
+.tape{position:relative;height:14px;flex:none;overflow:hidden;
+  background:linear-gradient(180deg,#F0FF4D 0,var(--hv) 30%,#CFE800 100%)}
+.tape::before{content:"";position:absolute;left:0;right:0;top:32%;height:36%;
+  background:
+    repeating-linear-gradient(60deg,rgba(255,255,255,.55) 0 1px,transparent 1px 3px),
+    repeating-linear-gradient(-60deg,rgba(0,0,0,.18) 0 1px,transparent 1px 3px),
+    linear-gradient(180deg,#E9EDF0,#A9B1B8 50%,#D7DCE0);
+  box-shadow:0 0 0 .5px rgba(0,0,0,.25)}
+.tape::after{content:"";position:absolute;top:0;bottom:0;width:30%;left:-40%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.65),transparent);
+  animation:sheen 5.5s var(--ease) infinite}
+.tape--top{height:10px}
+.tape--div{height:8px;border-radius:2px}
+.tape--card{height:12px}
+@keyframes sheen{0%,62%{left:-40%}100%{left:120%}}
+
+/* ---------- buttons ---------- */
+.btn{display:flex;align-items:center;justify-content:center;gap:10px;min-height:var(--tap);padding:0 22px;border-radius:999px;
+  font:700 18px/1 var(--f-body);letter-spacing:.01em;transition:transform 120ms var(--ease),background var(--t),opacity var(--t)}
+.btn:active{transform:scale(.97)}
+.btn--hv{background:var(--hv);color:var(--hv-ink);box-shadow:0 10px 30px -10px rgba(227,255,0,.55)}
+.btn--hv[disabled]{background:var(--s3);color:var(--faint);box-shadow:none;cursor:default}
+.btn--ghost{background:var(--s2);color:var(--text);box-shadow:inset 0 0 0 1px var(--line)}
+.btn--text{min-height:44px;padding:0 6px;color:var(--muted);font-weight:600}
+.btn--block{width:100%}
+.btn--sm{min-height:44px;padding:0 16px;font-size:16px}
+.iconbtn{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:var(--s2);box-shadow:inset 0 0 0 1px var(--line);flex:none}
+
+/* ---------- top bar ---------- */
+.bar{display:flex;align-items:center;gap:12px;padding:14px 16px 10px;flex:none}
+.bar-title{flex:1;min-width:0}
+.bar-title .eyebrow{font-size:11px}
+.bar-title h1{font:800 22px/1 var(--f-display);text-transform:uppercase;margin:3px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.saved{display:flex;align-items:center;gap:6px;font:600 12px/1 var(--f-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.saved i{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
+
+/* ---------- chips ---------- */
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;border-radius:999px;background:var(--s2);box-shadow:inset 0 0 0 1px var(--line);font:600 15px/1 var(--f-body);white-space:nowrap}
+.status{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;font:600 12px/1 var(--f-mono);letter-spacing:.04em;text-transform:uppercase}
+.status--sent{background:var(--green-soft);color:var(--green)}
+.status--signed{background:rgba(77,139,255,.14);color:var(--blue)}
+.status--draft{background:var(--amber-soft);color:var(--amber)}
+
+/* ---------- mic ---------- */
+.mic{position:relative;width:96px;height:96px;border-radius:50%;background:var(--hv);color:var(--hv-ink);display:grid;place-items:center;flex:none;
+  box-shadow:0 0 0 8px rgba(227,255,0,.08),0 0 0 18px rgba(227,255,0,.04),0 18px 50px -8px rgba(227,255,0,.55);transition:transform 160ms var(--ease)}
+.mic .ico{width:38px;height:38px;stroke-width:2.2}
+.mic:active{transform:scale(.95)}
+.mic::before,.mic::after{content:"";position:absolute;inset:-2px;border-radius:50%;border:2px solid var(--hv);opacity:0;pointer-events:none}
+.mic.listening::before{animation:ring 1.6s var(--ease) infinite}
+.mic.listening::after{animation:ring 1.6s var(--ease) .8s infinite}
+@keyframes ring{0%{transform:scale(1);opacity:.55}100%{transform:scale(1.75);opacity:0}}
+.mic--md{width:76px;height:76px}

@@ -1,0 +1,208 @@
+=== safe-word-engine.ts — part 7 of 19. Join all parts in order to get the full file. ===
+
+  // Answers to direct commands ("who's signed?") skip the touch hold-off but still wait their turn.
+  canReply(now: number): boolean {
+    if (this.muted || this.speaking) return false;
+    const wait = this.lastLong ? PACING.endOfTurnLongMs : PACING.endOfTurnShortMs;
+    return now - this.lastSpeechEnd >= Math.min(wait, PACING.endOfTurnShortMs) && now - this.lastAppSpoke >= PACING.minGapMs;
+  }
+
+  // Visual only: soft glow on the ℹ️ button after a long quiet spell. Never a voice prompt.
+  showInfoGlow(now: number): boolean {
+    return this.field !== null && now - this.fieldSince >= PACING.infoGlowAfterMs && now - this.lastTouch >= PACING.infoGlowAfterMs;
+  }
+
+  // Offer a suggestion (as a question) only after a second miss, once per field.
+  shouldOfferSuggestion(fieldId: string): boolean {
+    return !this.muted && (this.misses[fieldId] ?? 0) >= 2 && !this.offered.has(fieldId);
+  }
+}
+
+export const OFFER_LINE = "Want a suggestion for that one?";
+
+// ===================== extract =====================
+// Turns a voice transcript into a structured JobBrief, then checks it strictly.
+// The model is only asked to EXTRACT what the tradie said. It never writes hazards or controls.
+
+
+export const TRADE_VOCABULARY = [
+  "EWP", "scissor lift", "boom lift", "RCD", "tilt-up", "precast", "excavator", "bobcat",
+  "telehandler", "scaffold", "harness", "static line", "exclusion zone", "spotter",
+  "angle grinder", "nail gun", "jackhammer", "concrete saw", "fibro", "Colorbond",
+  "switchboard", "isolation", "lock out tag out", "LOTO", "trench shield", "acrow prop",
+];
+
+// Pass TRADE_VOCABULARY to the speech-to-text service as custom vocabulary / keyterms
+// where the provider supports it. This is the single biggest accuracy gain on site.
+
+export const EXTRACTION_PROMPT = `You extract job details from an Australian tradie's spoken description of a job.
+Return ONLY valid JSON matching this shape:
+{"task": string|null, "location": string|null, "maxHeightMetres": number|null,
+ "trenchDepthMetres": number|null, "equipment": string[], "crewSize": number|null,
+ "siteConditions": string[]}
+Rules:
+- Use only what the speaker said. If something was not said, use null or [].
+- Never invent hazards, controls, equipment or numbers.
+- Convert spoken numbers to digits ("two storey" is NOT a height; leave maxHeightMetres null unless a height was stated).
+- Keep trade terms as spoken (EWP, scissor lift, bobcat).
+- siteConditions = things about the site: wet, windy, live traffic, occupied house, asbestos suspected, near power lines.`;
+
+export function parseBrief(transcript: string, modelJson: string): JobBrief {
+  let raw: any;
+  try {
+    raw = JSON.parse(modelJson);
+  } catch {
+    throw new Error("Extraction returned invalid JSON — retry, never guess");
+  }
+  const str = (v: any) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const num = (v: any) => (typeof v === "number" && isFinite(v) && v >= 0 ? v : null);
+  const list = (v: any) =>
+    Array.isArray(v) ? v.filter((x) => typeof x === "string" && x.trim()).map((x: string) => x.trim()) : [];
+  const crew = num(raw.crewSize);
+  return {
+    transcript,
+    task: str(raw.task),
+    location: str(raw.location),
+    maxHeightMetres: num(raw.maxHeightMetres),
+    trenchDepthMetres: num(raw.trenchDepthMetres),
+    equipment: list(raw.equipment),
+    crewSize: crew !== null && Number.isInteger(crew) && crew > 0 ? crew : null,
+    siteConditions: list(raw.siteConditions),
+  };
+}
+
+// One short follow-up question at a time, most important first.
+export function nextFollowUp(brief: JobBrief, heightLikely: boolean): string | null {
+  if (!brief.task) return "What's the job you're doing today?";
+  if (heightLikely && brief.maxHeightMetres === null)
+    return "Roughly how high off the ground will you be working, in metres?";
+  if (brief.equipment.length === 0) return "What gear and tools are you using?";
+  if (brief.crewSize === null) return "How many in the crew?";
+  return null;
+}
+
+// The read-back the tradie confirms with one tap.
+export function readBack(brief: JobBrief): string {
+  const parts = [
+    brief.task,
+    brief.location,
+    brief.maxHeightMetres !== null ? `up to ${brief.maxHeightMetres} m` : null,
+    brief.equipment.length ? brief.equipment.join(", ") : null,
+    brief.crewSize !== null ? `${brief.crewSize} crew` : null,
+  ].filter(Boolean);
+  return `${parts.join(" — ")}. Correct?`;
+}
+
+// ===================== select =====================
+// Decides which HRCW activities apply and which reviewed modules to use.
+// Anything the brief mentions that no reviewed module covers is FLAGGED, never filled in.
+
+
+const norm = (s: string) => ` ${s.toLowerCase().replace(/[^a-z0-9.\- ]+/g, " ").replace(/\s+/g, " ")} `;
+// Matches at the start of a word, so "roof" also catches "roofing". Leaning towards
+// catching too much is deliberate: a missed high-risk activity is worse than an extra one.
+const mentions = (text: string, term: string) => text.includes(norm(term).trimEnd());
+
+function briefText(b: JobBrief): string {
+  return norm([b.transcript, b.task ?? "", b.location ?? "", ...b.equipment, ...b.siteConditions].join(" "));
+}
+
+export function isPublishable(m: Module): boolean {
+  if (m.status !== "reviewed" || !m.reviewedBy || !m.reviewedAt) return false;
+  if (m.specialistReviewRequired && !m.specialistReviewedBy) return false;
+  return true;
+}
+
+export interface Selection {
+  hrcw: { id: string; title: string }[];
+  modules: Module[];
+  notCovered: CoverageFlag[];
+  notices: string[];
+  needsHeight: boolean;
+}
+
+export function select(brief: JobBrief, library: Module[]): Selection {
+  const text = briefText(brief);
+  const notices: string[] = [];
+  const notCovered: CoverageFlag[] = [];
+
+  // 1. Detect HRCW activities.
+  const detected = new Set<string>();
+  for (const c of HRCW_CATEGORIES) {
+    if (c.triggers.some((t) => mentions(text, t))) detected.add(c.id);
+  }
+  // Numbers override keyword guesses where we have them.
+  const heightWords = detected.has("falls");
+  if (brief.maxHeightMetres !== null) {
+    if (brief.maxHeightMetres > JURISDICTION.fallThresholdMetres) detected.add("falls");
+    else detected.delete("falls");
+  }
+  if (brief.trenchDepthMetres !== null) {
+    if (brief.trenchDepthMetres > JURISDICTION.trenchDepthMetres) detected.add("trench-tunnel");
+    else if (!mentions(text, "tunnel") && !mentions(text, "shaft")) detected.delete("trench-tunnel");
+  }
+
+  // 2. Pick reviewed modules only.
+  const usable = library.filter(isPublishable);
+  const chosen = usable.filter(
+    (m) =>
+      (m.hrcwCategoryId !== null && detected.has(m.hrcwCategoryId)) ||
+      (m.hrcwCategoryId === null && m.triggers.some((t) => mentions(text, t)))
+  );
+
+  // 3. Flag HRCW activities with no reviewed module.
+  for (const id of detected) {
+    if (!chosen.some((m) => m.hrcwCategoryId === id)) {
+      const cat = HRCW_CATEGORIES.find((c) => c.id === id)!;
+      notCovered.push({
+        item: cat.title,
+        message: "Not covered: no reviewed module for this high-risk activity. Add hazards and controls before work starts.",
+      });
+    }
+  }
+
+  // 4. Flag equipment and site conditions no chosen module mentions.
+  const covered = (term: string) =>
+    chosen.some((m) => m.triggers.some((t) => norm(term).includes(norm(t).trim()) || norm(t).includes(norm(term).trim())));
+  for (const item of [...brief.equipment, ...brief.siteConditions]) {
+    if (!covered(item)) notCovered.push({ item, message: "Not covered: add a control." });
+  }
+
+  // 5. Legal notice when no HRCW is detected.
+  if (detected.size === 0) {
+    notices.push(
+      "No high-risk construction work detected in this brief. A SWMS may not be legally required for this job, but the risks still need managing."
+    );
+  }
+
+  return {
+    hrcw: HRCW_CATEGORIES.filter((c) => detected.has(c.id)).map((c) => ({ id: c.id, title: c.title })),
+    modules: chosen,
+    notCovered,
+    notices,
+    needsHeight: heightWords && brief.maxHeightMetres === null,
+  };
+}
+
+// ===================== assemble =====================
+// Builds the SWMS from the selection, and binds crew sign-offs to the exact content signed.
+
+
+const LEVEL_ORDER: ControlLevel[] = ["elimination", "substitution", "isolation", "engineering", "administrative", "ppe"];
+
+export const DISCLAIMER =
+  "This SWMS was prepared from the job details provided and content reviewed by a WHS-qualified professional. " +
+  "It is not a certification of compliance. The business doing the work is responsible for checking it against the site, " +
+  "consulting workers, putting the controls in place and monitoring them. If the work changes or the SWMS is not followed, stop work and review it.";
+
+function orderControls(h: Hazard): Hazard {
+  return { ...h, controls: [...h.controls].sort((a, b) => LEVEL_ORDER.indexOf(a.level) - LEVEL_ORDER.indexOf(b.level)) };
+}
+
+// Stable JSON so the same content always gives the same hash.
+function canonical(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
+  if (v && typeof v === "object")
+    return `{${Object.keys(v as object).sort().map((k) => `${JSON.stringify(k)}:${canonical((v as any)[k])}`).join(",")}}`;
+  return JSON.stringify(v);
+}

@@ -1,0 +1,255 @@
+=== safe-word-engine.ts — part 2 of 19. Join all parts in order to get the full file. ===
+
+export const JURISDICTION = {
+  // Founder to confirm per state before launch (Queensland has its own fall rules).
+  state: "QLD",
+  fallThresholdMetres: 2,
+  trenchDepthMetres: 1.5,
+};
+
+// ===================== types =====================
+// Core data shapes. Every SWMS is built only from these — nothing free-written by the AI.
+
+export type ControlLevel =
+  | "elimination"
+  | "substitution"
+  | "isolation"
+  | "engineering"
+  | "administrative"
+  | "ppe";
+
+export interface Control {
+  id: string;
+  text: string;
+  level: ControlLevel; // hierarchy of control — used to order controls, most effective first
+}
+
+export interface Hazard {
+  id: string;
+  description: string;
+  risk: string; // what could go wrong
+  controls: Control[];
+  source?: "reviewed-module" | "added-on-site"; // on-site additions are shown as such on the PDF
+}
+
+export interface Module {
+  id: string;
+  title: string;
+  hrcwCategoryId: string | null; // null = common module (manual handling, power tools…)
+  triggers: string[];
+  hazards: Hazard[];
+  sources: string[]; // codes of practice the module was drafted from
+  version: number;
+  status: "draft" | "reviewed";
+  reviewedBy?: string;
+  reviewedAt?: string; // ISO date
+  specialistReviewRequired?: boolean; // electrical, asbestos
+  specialistReviewedBy?: string;
+  // Unique, founder-reviewed plain-English explainer used on the SEO page (min 120 words).
+  // No summary = no public page, so search pages are never thin or unreviewed.
+  seoSummary?: string;
+}
+
+// What the voice brief is turned into. Unknowns stay null — never guessed.
+export interface JobBrief {
+  transcript: string;
+  task: string | null;
+  location: string | null;
+  maxHeightMetres: number | null;
+  trenchDepthMetres: number | null;
+  equipment: string[];
+  crewSize: number | null;
+  siteConditions: string[];
+}
+
+export interface CoverageFlag {
+  item: string; // the thing from the brief that no reviewed module covers
+  message: string;
+}
+
+export interface SwmsDraft {
+  id: string;
+  version: number;
+  company: { name: string; abn?: string; logoUrl?: string };
+  brief: JobBrief;
+  hrcwActivities: { id: string; title: string }[];
+  modules: { id: string; title: string; version: number }[];
+  hazards: Hazard[]; // controls already ordered by hierarchy
+  notCovered: CoverageFlag[];
+  notices: string[];
+  disclaimer: string;
+  createdAt: string;
+  contentHash: string; // SHA-256 of the safety content; signatures bind to this
+}
+
+export interface SignOff {
+  name: string;
+  role: string;
+  signedAt: string;
+  contentHash: string; // must equal the SWMS contentHash at time of signing
+  signatureId: string; // which saved signature was applied
+  signatureVersion: number;
+}
+
+// ===================== signature =====================
+// Signature vault. Draw once on the touchpad, save it, apply it to as many documents as needed.
+// Redo any time: the new version becomes current, older versions stay on record so documents
+// already signed still verify.
+//
+// Two rules keep signatures legally meaningful:
+//  1. Only the owner can apply their own signature. Nobody applies a crew member's signature for them.
+//  2. Every application needs a deliberate tap ("Sign here") — never applied automatically —
+//     and is stamped with name, role, time and the exact document version.
+
+
+export interface SavedSignature {
+  id: string;
+  ownerId: string;
+  ownerName: string;
+  svgPath: string; // touchpad strokes as an SVG path — crisp at any size, tiny to store
+  version: number;
+  createdAt: string;
+  retiredAt?: string; // set when replaced by a redo
+}
+
+export interface SignatureStamp {
+  signatureId: string;
+  signatureVersion: number;
+  ownerId: string;
+  ownerName: string;
+  role: string;
+  fieldId: string;
+  documentHash: string;
+  appliedAt: string;
+}
+
+export class SignatureVault {
+  private all: SavedSignature[] = [];
+
+  constructor(existing: SavedSignature[] = []) {
+    this.all = [...existing];
+  }
+
+  current(ownerId: string): SavedSignature | undefined {
+    return this.all.find((s) => s.ownerId === ownerId && !s.retiredAt);
+  }
+
+  byId(id: string): SavedSignature | undefined {
+    return this.all.find((s) => s.id === id);
+  }
+
+  // First save, or a redo if one already exists.
+  save(ownerId: string, ownerName: string, svgPath: string): SavedSignature {
+    if (!isUsableSignature(svgPath)) throw new Error("That one came out a bit small. Have another go?");
+    const prev = this.current(ownerId);
+    if (prev) prev.retiredAt = new Date().toISOString();
+    const sig: SavedSignature = {
+      id: newId(),
+      ownerId,
+      ownerName,
+      svgPath,
+      version: prev ? prev.version + 1 : 1,
+      createdAt: new Date().toISOString(),
+    };
+    this.all.push(sig);
+    return sig;
+  }
+
+  history(ownerId: string): SavedSignature[] {
+    return this.all.filter((s) => s.ownerId === ownerId).sort((a, b) => a.version - b.version);
+  }
+
+  export(): SavedSignature[] {
+    return [...this.all];
+  }
+}
+
+// Rejects a blank pad or a stray tap: needs a real stroke of reasonable length.
+export function isUsableSignature(svgPath: string): boolean {
+  const nums = (svgPath.match(/-?\d+(\.\d+)?/g) || []).map(Number);
+  if (nums.length < 8) return false;
+  let length = 0;
+  for (let i = 2; i + 1 < nums.length; i += 2) length += Math.hypot(nums[i] - nums[i - 2], nums[i + 1] - nums[i - 1]);
+  return length >= 60;
+}
+
+export function applySignature(
+  vault: SignatureVault,
+  opts: { actingUserId: string; fieldId: string; role: string; documentHash: string; confirmedTap: boolean }
+): SignatureStamp {
+  if (!opts.confirmedTap) throw new Error("Tap 'Sign here' to apply your signature.");
+  const sig = vault.current(opts.actingUserId);
+  if (!sig) throw new Error("No saved signature yet. Draw it once and we'll keep it for next time.");
+  return {
+    signatureId: sig.id,
+    signatureVersion: sig.version,
+    ownerId: sig.ownerId,
+    ownerName: sig.ownerName,
+    role: opts.role,
+    fieldId: opts.fieldId,
+    documentHash: opts.documentHash,
+    appliedAt: new Date().toISOString(),
+  };
+}
+
+export function verifyStamp(vault: SignatureVault, stamp: SignatureStamp, documentHash: string): boolean {
+  const sig = vault.byId(stamp.signatureId);
+  return !!sig && sig.ownerId === stamp.ownerId && sig.version === stamp.signatureVersion && stamp.documentHash === documentHash;
+}
+
+// "Sign everywhere I need to": one tap applies the person's saved signature to every signature
+// box that's theirs on the document (e.g. a company form with "Prepared by" on page 1 and
+// "Acknowledged" on page 4). Still one deliberate tap, still only their own signature.
+export function applyToAllMyFields(
+  vault: SignatureVault,
+  fields: { id: string; kind: string; signer?: "author" | "crew" | "supervisor" }[],
+  opts: { actingUserId: string; as: "author" | "crew" | "supervisor"; role: string; documentHash: string; confirmedTap: boolean }
+): SignatureStamp[] {
+  const mine = fields.filter((f) => f.kind === "signature" && (f.signer ?? "author") === opts.as);
+  return mine.map((f) => applySignature(vault, { ...opts, fieldId: f.id }));
+}
+
+// ===================== forms =====================
+// Forms: the generic Safe Word SWMS template, and company paperwork uploaded into the dashboard.
+// Every field carries its own spoken prompt, spoken help and detail rules, so the voice guide
+// can walk the user through any form, ours or theirs.
+
+
+export type FieldKind = "text" | "longtext" | "number" | "date" | "checkbox" | "signature" | "logo" | "hazards" | "hrcw";
+
+export interface FieldDef {
+  id: string;
+  key: StandardKey | null; // what the field means, so data can flow between forms
+  label: string;
+  spokenName?: string; // how it's said out loud, e.g. "the review bit"
+  kind: FieldKind;
+  required: boolean;
+  minWords?: number; // detail check for free-text answers
+  mustInclude?: ("number" | "action")[];
+  voicePrompt: string; // what the app says to ask for it
+  helpPrompt: string; // what the app says if the user asks for help
+  nudge?: string; // friendly line when the answer's there but a bit light
+  whsPhrase?: boolean; // tidy the spoken answer into WHS language (with faithfulness check)
+  signer?: "author" | "crew" | "supervisor";
+  place?: { page: number; x: number; y: number; w: number; h: number }; // position on uploaded paperwork (PDF points)
+}
+
+export type StandardKey =
+  | "businessName" | "abn" | "businessAddress" | "principalContractor" | "siteAddress"
+  | "workDescription" | "hrcw" | "hazards" | "responsiblePerson" | "datePrepared"
+  | "reviewTrigger" | "authorSignature" | "crewSignatures" | "supervisorSignature" | "logo"
+  | "controlMonitoring" | "dateProvided";
+
+export interface FormTemplate {
+  id: string;
+  name: string;
+  kind: "generic" | "company";
+  companyId?: string;
+  logoUrl?: string; // optional on the generic template
+  fileUrl?: string; // original uploaded paperwork (PDF) for company forms
+  fields: FieldDef[];
+  version: number;
+  createdAt: string;
+}
+
+const F = (f: FieldDef) => f;

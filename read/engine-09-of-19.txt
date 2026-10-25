@@ -1,0 +1,203 @@
+=== safe-word-engine.ts — part 9 of 19. Join all parts in order to get the full file. ===
+
+// ===================== suggest =====================
+// The ℹ️ button: a suggestion for the field, based on the rest of the form and past jobs.
+// It's an offer, shown with where it came from. It never fills the field by itself:
+// the person taps "Use this" (or says "use that"), edits it, or ignores it.
+// Safety content is never guessed: control suggestions come only from reviewed modules.
+
+
+export interface SuggestContext {
+  today: string;
+  profile?: Partial<Record<StandardKey, string>>;
+  pastJobs?: DraftDoc[]; // newest first, same form
+  brief?: JobBrief;
+  library?: Module[];
+  notCoveredItem?: string; // the hazard/condition needing a control
+}
+
+export interface Suggestion { text: string; basis: string }
+
+const REVIEW_STANDARD = "Review if the scope of work, crew, equipment or site conditions change, or if a control isn't working";
+
+export function suggestFor(form: FormTemplate, values: Values, fieldId: string, ctx: SuggestContext): Suggestion | null {
+  const field = form.fields.find((f) => f.id === fieldId);
+  if (!field || !field.key) return null;
+  const key = field.key;
+  const past = (ctx.pastJobs ?? []).map((j) => j.values);
+  const fromPast = (k: string) => past.map((v) => v[k]).find((x) => typeof x === "string" && x.trim()) as string | undefined;
+
+  switch (key) {
+    case "businessName": case "abn": case "businessAddress": {
+      const v = ctx.profile?.[key];
+      return v ? { text: v, basis: "From your saved details" } : null;
+    }
+    case "siteAddress": {
+      const v = fromPast(fieldId);
+      return v ? { text: v, basis: "From your last job" } : null;
+    }
+    case "principalContractor": case "responsiblePerson": {
+      const site = values[form.fields.find((f) => f.key === "siteAddress")?.id ?? ""];
+      const sameSite = past.find((v) => site && v[form.fields.find((f) => f.key === "siteAddress")!.id] === site);
+      const v = (sameSite?.[fieldId] as string | undefined) || fromPast(fieldId);
+      return v ? { text: v, basis: sameSite ? "Same as last time at this site" : "Same as your last job" } : null;
+    }
+    case "workDescription": {
+      const b = ctx.brief;
+      if (b?.task) {
+        const parts = [
+          b.task,
+          b.location ? ` at ${b.location}` : "",
+          b.maxHeightMetres !== null ? `, working up to ${b.maxHeightMetres} m` : "",
+          b.equipment.length ? `, using ${b.equipment.join(", ")}` : "",
+          b.crewSize !== null ? `. Crew of ${b.crewSize}` : "",
+        ];
+        return { text: parts.join(""), basis: "Pulled together from what you've said" };
+      }
+      return { text: "The task, where it is, the gear you're using and how many of you", basis: "A layout that works well" };
+    }
+    case "reviewTrigger":
+      return { text: REVIEW_STANDARD, basis: "What most SWMS use" };
+    case "datePrepared":
+      return { text: ctx.today, basis: "Today's date" };
+    case "hazards": {
+      if (!ctx.notCoveredItem || !ctx.library) return null;
+      const item = ctx.notCoveredItem.toLowerCase();
+      for (const m of ctx.library.filter(isPublishable)) {
+        const hit = m.triggers.some((t) => item.includes(t.toLowerCase())) ||
+          m.hazards.some((h) => h.description.toLowerCase().includes(item));
+        if (hit) {
+          const h = m.hazards.find((x) => x.description.toLowerCase().includes(item)) ?? m.hazards[0];
+          if (h?.controls[0]) return { text: h.controls[0].text, basis: "From our reviewed content" };
+        }
+      }
+      return null; // never guess a safety control
+    }
+    default:
+      return null;
+  }
+}
+
+// ===================== terms =====================
+// First-run terms: smooth, barely noticeable, but properly agreed.
+// The only first-run screen is "Let's get your signature on file". Under the signature pad sit three
+// short lines and a Terms link, right next to the button. Saving the signature = agreeing to the terms.
+// No "waiver" or "disclaimer" wording, no scroll box, no tick-box, no extra screen.
+// Asked once, ever. Only asked again (once) if the terms materially change.
+// Crew signing by link get a single line beside their first signature instead.
+
+
+export const TERMS = {
+  version: 1,
+  url: "/terms/", // plain-English terms page, written by a lawyer
+  founderSummaryEmail: "venture-lab-8grv@agentmail.to", // weekly summary, no signature images
+};
+
+export const FIRST_RUN_COPY = {
+  heading: "Let's get your signature on file",
+  lines: [
+    "Safe Word helps you build your SWMS. You check it fits the site.",
+    "Your details stay in Australia and your signature is only ever used by you.",
+  ],
+  agreeLine: "By saving your signature, you agree to our Terms.", // "Terms" links to TERMS.url
+  button: "Save signature",
+  next: "What's the job?", // the first thing they hear afterwards
+};
+
+export const CREW_FIRST_SIGN_LINE = "By signing, you agree to our Terms.";
+
+// Changed terms: one quiet line on next open, same signature, one tap.
+export const TERMS_UPDATED_COPY = {
+  line: "We've updated our Terms. Tap to agree and carry on.",
+  button: "Agree",
+};
+
+export interface Acceptance {
+  userId: string;
+  name: string;
+  termsVersion: number;
+  acceptedAt: string;
+  signatureId: string;
+  device: string; // e.g. "iPhone, Safari"
+  via: "first-run" | "crew-link" | "terms-update";
+}
+
+export class TermsLedger {
+  private records: Acceptance[] = [];
+  constructor(existing: Acceptance[] = []) { this.records = [...existing]; }
+
+  hasCurrent(userId: string): boolean {
+    return this.records.some((r) => r.userId === userId && r.termsVersion === TERMS.version);
+  }
+
+  // Everything else in the app stays locked until this is true.
+  appUnlocked(userId: string): boolean { return this.hasCurrent(userId); }
+
+  latest(userId: string): Acceptance | undefined {
+    return this.records.filter((r) => r.userId === userId).sort((a, b) => b.termsVersion - a.termsVersion)[0];
+  }
+
+  record(a: Acceptance): Acceptance {
+    if (!this.hasCurrent(a.userId)) this.records.push(a);
+    return this.latest(a.userId)!;
+  }
+
+  since(iso: string): Acceptance[] { return this.records.filter((r) => r.acceptedAt >= iso); }
+  all(): Acceptance[] { return [...this.records]; }
+}
+
+// First run: the signature they draw is saved for everyday use AND records their agreement.
+export function firstRunSave(
+  vault: SignatureVault, ledger: TermsLedger,
+  opts: { userId: string; name: string; svgPath: string; device: string; at: string; via?: Acceptance["via"] }
+): { signature: SavedSignature; acceptance: Acceptance } {
+  const existing = vault.current(opts.userId);
+  const signature = existing ?? vault.save(opts.userId, opts.name, opts.svgPath);
+  const acceptance = ledger.record({
+    userId: opts.userId, name: opts.name, termsVersion: TERMS.version, acceptedAt: opts.at,
+    signatureId: signature.id, device: opts.device, via: opts.via ?? "first-run",
+  });
+  return { signature, acceptance };
+}
+
+// What the app shows on open: nothing, the first-run screen, or the one-line update.
+export function termsPrompt(ledger: TermsLedger, userId: string): "none" | "first-run" | "updated" {
+  if (ledger.hasCurrent(userId)) return "none";
+  return ledger.latest(userId) ? "updated" : "first-run";
+}
+
+// The user's own copy, emailed once.
+export function userCopyEmail(a: Acceptance, baseUrl: string) {
+  return {
+    subject: "Welcome to Safe Word",
+    text: `G'day ${a.name.split(" ")[0]},\n\nYou're all set up. For your records, you agreed to our Terms (version ${a.termsVersion}) on ${a.acceptedAt.slice(0, 10)}. You can read them any time at ${baseUrl}${TERMS.url}\n\nSafe Word`,
+  };
+}
+
+// Weekly summary for the founder. Names, dates and versions only — never signature images.
+export function founderSummary(records: Acceptance[], weekOf: string) {
+  const lines = records.map((r) => `${r.acceptedAt.slice(0, 10)}  ${r.name}  v${r.termsVersion}  ${r.via}`);
+  return {
+    to: TERMS.founderSummaryEmail,
+    subject: `Safe Word: ${records.length} new sign-up${records.length === 1 ? "" : "s"} (week of ${weekOf})`,
+    text: records.length ? lines.join("\n") : "No new sign-ups this week.",
+  };
+}
+
+// ===================== membership =====================
+// Company paperwork access: who can use a company's forms, the confidentiality notice they accept,
+// and removing access when someone leaves.
+//
+//  - Company paperwork is only available to people the company currently authorises
+//    (employees and contractors). Safe Word's own template stays free for everyone.
+//  - First time someone opens a company's paperwork, they accept the company's notice.
+//    If the company changes the notice, it's accepted again.
+//  - The owner can remove anyone's access at any time. It takes effect immediately:
+//    company forms, drafts and the company's sent folder disappear for that person.
+//  - Their drafts in progress move to the owner (or a supervisor) so no work is lost.
+//  - Signed SWMS stay with the company as safety records. A person's signature on a past SWMS
+//    is never removed — it's part of the record.
+//  - Workers can't download blank company forms; only finished, signed documents leave the app.
+//  - Offline copies of company forms expire if the phone hasn't checked in for 7 days, so access
+//    removal reaches phones that were offline.
+//  - Every grant, acceptance and removal is logged.

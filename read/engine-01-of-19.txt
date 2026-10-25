@@ -1,0 +1,155 @@
+=== safe-word-engine.ts — part 1 of 19. Join all parts in order to get the full file. ===
+/*
+ * SAFE WORD — CORE ENGINE
+ * Read README.md first. Build the app around this file; do not rewrite its logic.
+ *
+ * One dependency-free TypeScript file. Runs in the browser, on the server and in edge functions.
+ * Run selfTest() on every build: it must print "All checks passed."
+ *
+ *  Crypto        portable IDs and SHA-256 (locks signatures to the exact document version)
+ *  HRCW          the 18 high-risk construction work activities (model WHS Regulations r291)
+ *  Types         modules, hazards, controls, job brief, SWMS, sign-offs
+ *  Signatures    draw once, save, apply unlimited times with one tap, redo any time;
+ *                only the owner can apply their own; every use stamped to the document version
+ *  Forms         Safe Word template (logo optional) + uploaded company paperwork, auto-mapped,
+ *                saved in the paperwork dashboard; natural spoken names for every field
+ *  Phrasing      tidies spoken or typed answers into WHS wording; blocks any added facts
+ *  Guide         guided filling, silent prefill, friendly read-over, "that's all" accepted
+ *  Commands      everything a person can say, in plain Aussie speech
+ *  Replies       specific, friendly things the app says back; TONE_BANNED keeps it respectful
+ *  Pacing        when the voice may speak: never over the person, never chasing, help on request
+ *  Extraction    speech-to-text vocabulary, extraction prompt, strict parsing, read-back
+ *  Selection     detects high-risk work, uses ONLY reviewed modules, flags anything not covered
+ *  Assembly      hierarchy-of-control ordering, content hash, signing blocked while flags are open
+ *  Launch gate   real site recordings: 10+ cases and 90%+ or no launch
+ *  Reuse         drafts, typing mode, undo, copy old reports, import other systems' reports
+ *  Suggest       the ℹ️ button: context suggestions, never guessed safety content
+ *  Voice         natural Australian female and male voices, pre-generated prompt audio
+ *  Logo          photo or upload with auto crop and clean-up, or find by website
+ *  Output        email, print (AirPrint or any printer), save to phone, sent log
+ *  Terms         first-run signature doubles as agreement; asked once; records + weekly summary
+ *  Membership    company paperwork access: confidentiality notice, remove access, audit log
+ *  SWMS Check    free gap report on an uploaded SWMS (lead magnet)
+ *  Content       founder's review rules: nothing goes live until reviewBlockers() is empty
+ *  SEO           hub, activity and trade pages from reviewed content; lintPages() gates the build
+ *  Self-test     selfTest()
+ *
+ * Values marked PASTE_ are supplied by the founder before launch.
+ * Test data inside selfTest() is not real safety content.
+ */
+
+// ===================== crypto =====================
+// Portable IDs and hashing: runs the same in the browser, on the server and in edge functions.
+// No Node-only modules.
+
+export function newId(): string {
+  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  if (c?.randomUUID) return c.randomUUID();
+  // Fallback for very old environments.
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (ch) => {
+    const r = (Math.random() * 16) | 0;
+    return (ch === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+// SHA-256 (synchronous, UTF-8). Used to lock signatures to the exact document version.
+const K = new Uint32Array([
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+]);
+
+export function sha256Hex(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  const bitLen = bytes.length * 8;
+  const padded = new Uint8Array(((bytes.length + 9 + 63) >> 6) << 6);
+  padded.set(bytes);
+  padded[bytes.length] = 0x80;
+  const view = new DataView(padded.buffer);
+  view.setUint32(padded.length - 8, Math.floor(bitLen / 0x100000000));
+  view.setUint32(padded.length - 4, bitLen >>> 0);
+  const H = new Uint32Array([0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]);
+  const W = new Uint32Array(64);
+  const rotr = (x: number, n: number) => (x >>> n) | (x << (32 - n));
+  for (let off = 0; off < padded.length; off += 64) {
+    for (let i = 0; i < 16; i++) W[i] = view.getUint32(off + i * 4);
+    for (let i = 16; i < 64; i++) {
+      const s0 = rotr(W[i - 15], 7) ^ rotr(W[i - 15], 18) ^ (W[i - 15] >>> 3);
+      const s1 = rotr(W[i - 2], 17) ^ rotr(W[i - 2], 19) ^ (W[i - 2] >>> 10);
+      W[i] = (W[i - 16] + s0 + W[i - 7] + s1) >>> 0;
+    }
+    let [a, b, c, d, e, f, g, h] = H;
+    for (let i = 0; i < 64; i++) {
+      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const t1 = (h + S1 + ((e & f) ^ (~e & g)) + K[i] + W[i]) >>> 0;
+      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const t2 = (S0 + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;
+      h = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+    }
+    H[0] += a; H[1] += b; H[2] += c; H[3] += d; H[4] += e; H[5] += f; H[6] += g; H[7] += h;
+  }
+  return Array.from(H, (x) => x.toString(16).padStart(8, "0")).join("");
+}
+
+// ===================== check =====================
+// Tiny portable assertion helper for selfTest() — no Node modules, runs anywhere.
+
+function fail(msg: string): never {
+  throw new Error(`Self-test failed: ${msg}`);
+}
+
+function same(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+export const assert = {
+  ok(v: unknown, msg = "expected a truthy value"): void { if (!v) fail(msg); },
+  equal(a: unknown, b: unknown, msg?: string): void { if (a !== b) fail(msg ?? `${JSON.stringify(a)} !== ${JSON.stringify(b)}`); },
+  notEqual(a: unknown, b: unknown, msg?: string): void { if (a === b) fail(msg ?? `${JSON.stringify(a)} should differ`); },
+  deepEqual(a: unknown, b: unknown, msg?: string): void { if (!same(a, b)) fail(msg ?? `${JSON.stringify(a)} not equal to ${JSON.stringify(b)}`); },
+  match(s: string, re: RegExp, msg?: string): void { if (!re.test(s)) fail(msg ?? `${s} does not match ${re}`); },
+  throws(fn: () => unknown, msg = "expected an error"): void {
+    try { fn(); } catch { return; }
+    fail(msg);
+  },
+};
+
+// ===================== hrcw =====================
+// The 18 high-risk construction work (HRCW) activities in the model WHS Regulations (r291).
+// Victoria uses its own 19-activity list and some states vary fall thresholds:
+// jurisdiction settings live in JURISDICTION and must be checked by the founder before launch.
+
+export interface HrcwCategory {
+  id: string;
+  number: number;
+  title: string;
+  // Words/phrases in a brief that suggest this category applies. Matching only SUGGESTS;
+  // the user confirms in the read-back step.
+  triggers: string[];
+}
+
+export const HRCW_CATEGORIES: HrcwCategory[] = [
+  { id: "falls", number: 1, title: "Risk of a person falling more than the fall threshold", triggers: ["roof", "re-roof", "ladder", "scaffold", "ewp", "scissor lift", "boom lift", "mezzanine", "height", "storey", "harness", "edge", "skylight", "gutter"] },
+  { id: "telco-tower", number: 2, title: "Work on a telecommunication tower", triggers: ["telecommunication tower", "telco tower", "comms tower", "mobile tower", "antenna mast"] },
+  { id: "demolition", number: 3, title: "Demolition of a load-bearing or structurally integral element", triggers: ["demolish", "demolition", "knock down", "remove load-bearing", "remove wall"] },
+  { id: "asbestos", number: 4, title: "Work likely to disturb asbestos", triggers: ["asbestos", "fibro", "acm", "super six", "pre-1990", "pre 1990"] },
+  { id: "temp-support", number: 5, title: "Structural alterations or repairs requiring temporary support", triggers: ["propping", "temporary support", "acrow", "underpin", "shoring", "structural alteration"] },
+  { id: "confined-space", number: 6, title: "Work in or near a confined space", triggers: ["confined space", "tank", "pit", "silo", "manhole", "vessel entry", "sewer"] },
+  { id: "trench-tunnel", number: 7, title: "Work in or near a shaft or trench deeper than 1.5 m, or a tunnel", triggers: ["trench", "excavation", "excavate", "shaft", "tunnel", "dig", "footing"] },
+  { id: "explosives", number: 8, title: "Work involving the use of explosives", triggers: ["explosive", "blasting", "detonate", "powder-actuated"] },
+  { id: "gas-mains", number: 9, title: "Work on or near pressurised gas distribution mains or piping", triggers: ["gas main", "gas line", "gas pipe", "pressurised gas"] },
+  { id: "chem-fuel-refrig", number: 10, title: "Work on or near chemical, fuel or refrigerant lines", triggers: ["fuel line", "refrigerant", "chemical line", "aircon line", "fuel tank"] },
+  { id: "energised-electrical", number: 11, title: "Work on or near energised electrical installations or services", triggers: ["live wire", "live power", "live circuit", "energised", "switchboard", "power line", "overhead line", "cable", "electrical", "isolation"] },
+  { id: "contaminated-atmosphere", number: 12, title: "Work in an area that may have a contaminated or flammable atmosphere", triggers: ["fumes", "flammable", "solvent", "contaminated", "gas detected", "spray booth"] },
+  { id: "tilt-up-precast", number: 13, title: "Tilt-up or precast concrete elements", triggers: ["tilt-up", "tilt up", "precast", "panel lift"] },
+  { id: "traffic-corridor", number: 14, title: "Work on, in or next to a road, railway, shipping lane or other traffic corridor in use", triggers: ["road", "traffic", "footpath", "railway", "rail corridor", "highway", "verge", "shipping lane"] },
+  { id: "mobile-plant", number: 15, title: "Work where there is movement of powered mobile plant", triggers: ["excavator", "bobcat", "forklift", "loader", "truck", "crane", "telehandler", "roller", "tipper", "plant"] },
+  { id: "temp-extremes", number: 16, title: "Work in areas with artificial extremes of temperature", triggers: ["cold room", "freezer room", "furnace", "kiln", "boiler room"] },
+  { id: "drowning", number: 17, title: "Work in or near water or other liquid with a risk of drowning", triggers: ["water", "pool", "dam", "river", "marina", "jetty", "pontoon", "tank of liquid"] },
+  { id: "diving", number: 18, title: "Diving work", triggers: ["diving", "diver", "underwater"] },
+];

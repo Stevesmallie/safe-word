@@ -1,0 +1,207 @@
+=== safe-word-engine.ts — part 8 of 19. Join all parts in order to get the full file. ===
+
+export function hashContent(d: Pick<SwmsDraft, "brief" | "hrcwActivities" | "modules" | "hazards" | "notCovered" | "version">): string {
+  return sha256Hex(canonical({ brief: d.brief, hrcw: d.hrcwActivities, modules: d.modules, hazards: d.hazards, notCovered: d.notCovered, version: d.version }));
+}
+
+export function assemble(brief: JobBrief, sel: Selection, company: SwmsDraft["company"]): SwmsDraft {
+  // De-duplicate hazards shared across modules.
+  const seen = new Set<string>();
+  const hazards: Hazard[] = [];
+  for (const m of sel.modules)
+    for (const h of m.hazards)
+      if (!seen.has(h.id)) {
+        seen.add(h.id);
+        hazards.push(orderControls({ ...h, source: "reviewed-module" }));
+      }
+
+  const base = {
+    id: newId(),
+    version: 1,
+    company,
+    brief,
+    hrcwActivities: sel.hrcw,
+    modules: sel.modules.map((m) => ({ id: m.id, title: m.title, version: m.version })),
+    hazards,
+    notCovered: sel.notCovered,
+    notices: sel.notices,
+    disclaimer: DISCLAIMER,
+    createdAt: new Date().toISOString(),
+  };
+  return { ...base, contentHash: hashContent(base) };
+}
+
+// Any edit creates a new version with a new hash — existing signatures no longer count.
+export function applyEdit(d: SwmsDraft, change: Partial<Pick<SwmsDraft, "hazards" | "notCovered" | "brief">>): SwmsDraft {
+  const next = { ...d, ...change, version: d.version + 1 };
+  return { ...next, contentHash: hashContent(next) };
+}
+
+// The crew resolves a "not covered" flag by adding their own hazard and controls on site.
+// It is labelled as added on site, not as reviewed content.
+export function resolveFlag(d: SwmsDraft, item: string, hazard: Omit<Hazard, "source">, keptAsIs = false): SwmsDraft {
+  if (hazard.controls.length === 0) throw new Error("Add at least one control.");
+  for (const c of hazard.controls) {
+    const problem = checkControl(c.text, keptAsIs);
+    if (problem) throw new Error(problem);
+  }
+  return applyEdit(d, {
+    hazards: [...d.hazards, orderControls({ ...hazard, source: "added-on-site" })],
+    notCovered: d.notCovered.filter((f) => f.item !== item),
+  });
+}
+
+// Crew sign-off uses each person's own saved signature (see signature.ts).
+export function signOff(d: SwmsDraft, stamp: SignatureStamp): SignOff {
+  if (d.notCovered.length > 0) throw new Error("There's still a hazard without a control. Once that's sorted the crew can sign.");
+  if (stamp.documentHash !== d.contentHash) throw new Error("This signature was applied to a different version of the SWMS.");
+  return {
+    name: stamp.ownerName,
+    role: stamp.role,
+    signedAt: stamp.appliedAt,
+    contentHash: d.contentHash,
+    signatureId: stamp.signatureId,
+    signatureVersion: stamp.signatureVersion,
+  };
+}
+
+export function validSignatures(d: SwmsDraft, sigs: SignOff[]): SignOff[] {
+  return sigs.filter((s) => s.contentHash === d.contentHash);
+}
+
+// ===================== gate =====================
+// Launch gate: real site recordings, scored automatically. 9 out of 10 or no launch.
+
+
+export interface GateCase {
+  name: string;
+  brief: JobBrief; // what the voice pipeline produced from the recording
+  expect: {
+    task: boolean; // task captured
+    equipment: string[]; // must all appear
+    crewSize: number | null;
+    hrcw: string[]; // HRCW category ids that must be detected
+  };
+}
+
+export interface GateResult {
+  name: string;
+  pass: boolean;
+  problems: string[];
+}
+
+export function scoreCase(c: GateCase, library: Module[]): GateResult {
+  const problems: string[] = [];
+  const b = c.brief;
+  if (c.expect.task && !b.task) problems.push("task missing");
+  const eq = b.equipment.map((e) => e.toLowerCase());
+  for (const e of c.expect.equipment) if (!eq.some((x) => x.includes(e.toLowerCase()))) problems.push(`equipment missed: ${e}`);
+  if (c.expect.crewSize !== b.crewSize) problems.push(`crew size ${b.crewSize} ≠ ${c.expect.crewSize}`);
+  const got = select(b, library).hrcw.map((h) => h.id);
+  for (const id of c.expect.hrcw) if (!got.includes(id)) problems.push(`high-risk activity missed: ${id}`);
+  return { name: c.name, pass: problems.length === 0, problems };
+}
+
+export function runGate(cases: GateCase[], library: Module[], threshold = 0.9) {
+  const results = cases.map((c) => scoreCase(c, library));
+  const passed = results.filter((r) => r.pass).length;
+  const rate = cases.length ? passed / cases.length : 0;
+  return { results, passed, total: cases.length, rate, launch: cases.length >= 10 && rate >= threshold };
+}
+
+// ===================== reuse =====================
+// Drafts, typing mode, and reusing old reports.
+//  - Fill any form entirely by keyboard. Typed words go in exactly as typed; "Tidy wording" is an
+//    optional button (same faithfulness check as voice), never automatic.
+//  - Open an old report (ours, or an uploaded PDF from another system), keep what still applies,
+//    clear what doesn't, then carry on by voice or keyboard. Switch any time.
+//  - Every change can be undone, and every field remembers where its content came from.
+
+
+export type FieldSource = "voice" | "typed" | "copied" | "suggested" | "prefilled" | "tidied";
+export type Mode = "voice" | "text";
+
+export interface DraftDoc {
+  id: string;
+  formId: string;
+  name: string; // e.g. "Re-roof, 12 Main St Bowen"
+  values: Values;
+  sources: Record<string, FieldSource>;
+  history: { fieldId: string; previous: unknown; previousSource?: FieldSource }[];
+  mode: Mode;
+  basedOn?: string; // id of the report it was copied from
+  createdAt: string;
+}
+
+export function newDraft(form: FormTemplate, name: string, mode: Mode = "voice"): DraftDoc {
+  return { id: newId(), formId: form.id, name, values: {}, sources: {}, history: [], mode, createdAt: new Date().toISOString() };
+}
+
+export function setValue(d: DraftDoc, fieldId: string, value: unknown, source: FieldSource): DraftDoc {
+  return {
+    ...d,
+    values: { ...d.values, [fieldId]: value },
+    sources: { ...d.sources, [fieldId]: source },
+    history: [...d.history, { fieldId, previous: d.values[fieldId], previousSource: d.sources[fieldId] }],
+  };
+}
+
+export function undo(d: DraftDoc): { draft: DraftDoc; fieldId: string | null; previous: unknown } {
+  const last = d.history[d.history.length - 1];
+  if (!last) return { draft: d, fieldId: null, previous: undefined };
+  const values = { ...d.values };
+  const sources = { ...d.sources };
+  if (last.previous === undefined) { delete values[last.fieldId]; delete sources[last.fieldId]; }
+  else { values[last.fieldId] = last.previous; if (last.previousSource) sources[last.fieldId] = last.previousSource; }
+  return { draft: { ...d, values, sources, history: d.history.slice(0, -1) }, fieldId: last.fieldId, previous: last.previous };
+}
+
+export function clearFields(d: DraftDoc, fieldIds: string[]): DraftDoc {
+  let out = d;
+  for (const id of fieldIds) out = setValue(out, id, "", "typed");
+  return out;
+}
+
+export function continueWith(d: DraftDoc, mode: Mode): DraftDoc {
+  return { ...d, mode };
+}
+
+// Copy an old report into a fresh draft.
+// Never copied: signatures (everyone signs the new one), the date (set to today), and the
+// high-risk work and hazards, which are rebuilt from the current reviewed content.
+export function copyFromOld(old: DraftDoc, form: FormTemplate, opts: { name: string; today: string; keep?: string[] }) {
+  const never = new Set(form.fields.filter((f) => f.kind === "signature" || f.kind === "hazards" || f.kind === "hrcw" || f.key === "datePrepared").map((f) => f.id));
+  let d = { ...newDraft(form, opts.name, old.mode), basedOn: old.id };
+  const carried: string[] = [];
+  for (const f of form.fields) {
+    const v = old.values[f.id];
+    if (never.has(f.id) || v === undefined || v === "") continue;
+    if (opts.keep && !opts.keep.includes(f.id)) continue;
+    d = { ...d, values: { ...d.values, [f.id]: v }, sources: { ...d.sources, [f.id]: "copied" as FieldSource } };
+    carried.push(f.id);
+  }
+  const date = form.fields.find((f) => f.key === "datePrepared");
+  if (date) d = { ...d, values: { ...d.values, [date.id]: opts.today }, sources: { ...d.sources, [date.id]: "prefilled" as FieldSource } };
+  return { draft: d, carried, rebuilt: [...never].filter((id) => form.fields.find((f) => f.id === id)?.kind !== "signature") };
+}
+
+// Fields still to do, in form order — what the voice works through after "continue by voice".
+export function remainingFields(form: FormTemplate, d: DraftDoc, ctx: CheckContext = {}) {
+  return form.fields.filter((f) => {
+    const issue = checkField(f, d.values[f.id], ctx);
+    return issue && (issue.problem === "missing" || issue.problem === "unsigned" || issue.problem === "not-covered");
+  });
+}
+
+// An old report from another system (uploaded PDF): field names and their filled-in text.
+export function importPreviousReport(form: FormTemplate, found: { name: string; value: string }[], name: string) {
+  let d = newDraft(form, name, "text");
+  const unmatched: { name: string; value: string }[] = [];
+  for (const item of found) {
+    const key = guessKey(item.name);
+    const field = form.fields.find((f) => f.key === key && f.kind !== "signature" && f.kind !== "hazards" && f.kind !== "hrcw");
+    if (!field || !item.value.trim()) { if (item.value.trim()) unmatched.push(item); continue; }
+    d = { ...d, values: { ...d.values, [field.id]: item.value.trim() }, sources: { ...d.sources, [field.id]: "copied" as FieldSource } };
+  }
+  return { draft: d, unmatched };
+}

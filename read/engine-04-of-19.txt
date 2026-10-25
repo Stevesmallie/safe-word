@@ -1,0 +1,198 @@
+=== safe-word-engine.ts — part 4 of 19. Join all parts in order to get the full file. ===
+
+export class PaperworkLibrary {
+  private forms: FormTemplate[] = [GENERIC_SWMS];
+  add(form: FormTemplate) {
+    this.forms = this.forms.filter((f) => f.id !== form.id).concat(form);
+  }
+  remove(id: string) {
+    if (id === GENERIC_SWMS.id) throw new Error("The Safe Word template can't be removed.");
+    this.forms = this.forms.filter((f) => f.id !== id);
+  }
+  list(companyId?: string) {
+    return this.forms.filter((f) => f.kind === "generic" || f.companyId === companyId);
+  }
+  get(id: string) {
+    return this.forms.find((f) => f.id === id);
+  }
+}
+
+// ===================== phrasing =====================
+// Smart phrasing: turns what the tradie said into clear WHS language for the form.
+// It may tidy and restructure. It may NOT add facts, numbers, equipment or controls.
+// Every rewrite passes faithfulnessCheck() and is read back for a one-tap OK.
+// If the check fails, the user's own words go on the form instead.
+
+export const WHS_PHRASING_PROMPT = `Rewrite the speaker's words as clear, professional Australian WHS wording for a Safe Work Method Statement field.
+Rules:
+- Keep every fact the speaker gave. Add nothing: no new hazards, controls, equipment, numbers, names or places.
+- Use plain, active sentences. Australian spelling. No jargon the speaker didn't use, except standard WHS terms for what they said.
+- Convert spoken numbers to digits with units (seven metres -> 7 m, forty k's -> 40 km/h).
+- If the speaker's words are too vague to rewrite without guessing, return exactly: NEEDS_MORE_DETAIL
+Return only the rewritten text.`;
+
+const WORD_NUMS: Record<string, number> = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18,
+  nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100,
+};
+
+export function numbersIn(text: string): number[] {
+  const out: number[] = [];
+  for (const m of text.matchAll(/\d+(\.\d+)?/g)) out.push(Number(m[0]));
+  const words = text.toLowerCase().split(/[^a-z]+/);
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i];
+    if (!(w in WORD_NUMS)) continue;
+    let v = WORD_NUMS[w];
+    // "forty five" -> 45
+    if (v >= 20 && v % 10 === 0 && words[i + 1] in WORD_NUMS && WORD_NUMS[words[i + 1]] < 10) {
+      v += WORD_NUMS[words[i + 1]];
+      i++;
+    }
+    out.push(v);
+  }
+  return out;
+}
+
+// Control and equipment words the phrasing must never introduce on its own.
+const GUARDED_TERMS = [
+  "harness", "lanyard", "static line", "guardrail", "edge protection", "scaffold", "ewp", "exclusion zone", "spotter",
+  "barricade", "traffic controller", "respirator", "p2", "ppe", "hard hat", "gloves", "glasses", "earmuffs",
+  "isolate", "isolation", "lock out", "loto", "tag out", "rcd", "permit", "gas test", "shoring", "trench shield",
+  "fire extinguisher", "first aid", "rescue plan", "ladder", "scissor lift", "boom lift", "crane", "dogman", "rigger",
+];
+
+export interface FaithfulnessResult {
+  ok: boolean;
+  problems: string[];
+  text: string; // what goes on the form
+}
+
+export function faithfulnessCheck(spoken: string, phrased: string): FaithfulnessResult {
+  const problems: string[] = [];
+  const p = phrased.trim();
+  if (p === "NEEDS_MORE_DETAIL") return { ok: false, problems: ["needs more detail"], text: spoken.trim() };
+
+  const said = new Set(numbersIn(spoken));
+  for (const n of numbersIn(p)) if (!said.has(n)) problems.push(`added a number that wasn't said: ${n}`);
+
+  const s = spoken.toLowerCase();
+  const pl = p.toLowerCase();
+  for (const t of GUARDED_TERMS) {
+    const re = new RegExp(`\\b${t.replace(/ /g, "\\s+")}`, "i");
+    if (re.test(pl) && !re.test(s)) problems.push(`added something that wasn't said: ${t}`);
+  }
+
+  const sw = spoken.split(/\s+/).filter(Boolean).length;
+  const pw = p.split(/\s+/).filter(Boolean).length;
+  if (pw > Math.max(12, sw * 2.5)) problems.push("rewrite is much longer than what was said");
+
+  const ok = problems.length === 0;
+  return { ok, problems, text: ok ? p : spoken.trim() };
+}
+
+// ===================== guide =====================
+// The voice guide: works through any form, asks for each field out loud, checks every answer,
+// and runs the final troubleshooting pass. Everything it says is also shown on screen.
+// The user can switch to typing at any point; the same checks apply.
+
+
+export type Values = Record<string, unknown>;
+
+export interface Issue {
+  fieldId: string;
+  problem: "missing" | "too-brief" | "needs-number" | "needs-action" | "unsigned" | "not-covered";
+  spoken: string;
+}
+
+const ACTION_WORDS = /\b(stop|use|wear|fit|install|isolate|check|inspect|keep|set up|barricade|tag|lock|test|supervise|restrict|secure|tie|remove|replace|clear|monitor|ensure|provide|maintain|erect|brief)\b/i;
+
+const words = (v: unknown) => (typeof v === "string" ? v.trim().split(/\s+/).filter(Boolean).length : 0);
+
+// accepted: fields the user chose to keep as they are ("that's all", "leave it").
+// They're never nudged again. Empty required fields, uncontrolled hazards and missing
+// signatures still can't be waved through.
+export interface CheckContext { notCoveredCount?: number; accepted?: string[] }
+
+export function checkField(f: FieldDef, v: unknown, ctx: CheckContext = {}): Issue | null {
+  const empty = v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+
+  // Tone: a mate reading over your shoulder. Points at the exact spot, friendly, no lecturing.
+  const label = spoken(f);
+  const n = ctx.notCoveredCount ?? 0;
+  if (f.kind === "hazards" && n > 0)
+    return { fieldId: f.id, problem: "not-covered", spoken: n === 1
+      ? "There's one hazard without a control yet. What'll you do about it?"
+      : `There are ${n} hazards without a control yet. Want to run through them?` };
+
+  if (f.kind === "signature") {
+    const stamps = (Array.isArray(v) ? v : v ? [v] : []) as SignatureStamp[];
+    if (f.required && stamps.length === 0)
+      return { fieldId: f.id, problem: "unsigned", spoken: f.signer === "crew" ? "Just waiting on the crew to sign." : "You haven't signed it yet." };
+    return null;
+  }
+
+  if (empty) return f.required ? { fieldId: f.id, problem: "missing", spoken: `Looks like the ${label} hasn't gone in yet.` } : null;
+
+  const kept = ctx.accepted?.includes(f.id) ?? false;
+
+  if (!kept && f.minWords && words(v) < f.minWords)
+    return { fieldId: f.id, problem: "too-brief", spoken: f.nudge ?? `The ${label} is a bit light. Can you add a bit more?` };
+
+  if (typeof v === "string") {
+    if (!kept && f.mustInclude?.includes("number") && numbersIn(v).length === 0)
+      return { fieldId: f.id, problem: "needs-number", spoken: `The ${label} needs a number. Roughly how many?` };
+    if (f.mustInclude?.includes("action") && !ACTION_WORDS.test(v))
+      return { fieldId: f.id, problem: "needs-action", spoken: "That one doesn't say what you'll actually do yet. What's the plan?" };
+  }
+
+  if (f.key === "abn" && typeof v === "string" && v.replace(/\D/g, "").length !== 11)
+    return { fieldId: f.id, problem: "missing", spoken: "That ABN looks a digit or two off. Mind reading it out again?" };
+
+  return null;
+}
+
+// Checks a single control the user adds for a "not covered" item.
+// A short control is fine if it says what they'll do ("stop if it's windy") and they've said
+// that's all. It still has to be an actual action.
+export function checkControl(text: string, keptAsIs = false): string | null {
+  if (!keptAsIs && words(text) < 4) return "That's a bit light. What'll you do, and how?";
+  if (!ACTION_WORDS.test(text)) return "That one doesn't say what you'll actually do yet. What's the plan?";
+  return null;
+}
+
+// ---------- How the guide talks ----------
+// Ask, don't explain. Help only when asked for, or after a second miss.
+// The second ask is shorter, never a repeat. Regular users get even less.
+
+export interface TalkState {
+  attempts: Record<string, number>; // failed answers per field
+  completedSwms: number; // after a few, prompts shrink to the bare question
+  muted: boolean; // text and taps only
+}
+
+export function whatToSay(f: FieldDef, s: TalkState, askedForHelp = false): string | null {
+  if (s.muted) return null;
+  if (askedForHelp) return f.helpPrompt;
+  const tries = s.attempts[f.id] ?? 0;
+  if (tries >= 2) return f.helpPrompt;
+  if (tries === 1 || s.completedSwms >= 5) return shortPrompt(f);
+  return f.voicePrompt;
+}
+
+export function shortPrompt(f: FieldDef): string {
+  if (f.kind === "signature") return f.signer === "crew" ? "Crew to sign." : "Sign?";
+  return `${f.label.split(/\s+\(|\s+for\s/)[0]}?`;
+}
+
+// Fields we already know (saved business details, last site, today's date) are filled in
+// silently and only shown in the final read-back — never asked.
+export function prefill(form: FormTemplate, profile: Partial<Record<string, unknown>>, today: string): Values {
+  const out: Values = {};
+  for (const f of form.fields) {
+    if (f.key === "datePrepared") out[f.id] = today;
+    else if (f.key && profile[f.key] !== undefined && f.kind !== "signature") out[f.id] = profile[f.key];
+  }
+  return out;
+}

@@ -1,0 +1,144 @@
+=== safe-word-engine.ts — part 15 of 19. Join all parts in order to get the full file. ===
+
+  // ---- Trade pages ----
+  for (const t of liveTrades) {
+    const url = tradeUrl(t);
+    const title = clip(`SWMS for ${t.plural} | Site-Specific SWMS | ${cfg.brand}`, 60);
+    const desc = clip(`SWMS for ${t.plural.toLowerCase()}: the high-risk work your jobs usually involve, and a fast way to build a site-specific SWMS your crew signs on site.`, 158);
+    const photo = cfg.tradePhotos?.[t.slug] && t.photoAlt
+      ? `<img class="photo" src="/img/trades/${t.slug}.webp" width="1200" height="800" alt="${esc(t.photoAlt)}" fetchpriority="high" decoding="async">\n`
+      : "";
+    const content = `${photo}<p class="lede">${esc(t.intro)}</p>
+<p><a class="cta" href="${cfg.checkPath}">Run a free SWMS Check</a></p>
+<h2>High-risk work ${esc(t.plural.toLowerCase())} commonly do</h2>
+<ul class="grid">${t.activities.map((id) => {
+      const cat = HRCW_CATEGORIES.find((x) => x.id === id)!;
+      return `<li>${isLive(id) ? `<a href="${actUrl(id)}">${esc(ACTIVITY_SEO[id].name)} SWMS</a>` : esc(cat.title)}</li>`;
+    }).join("")}</ul>
+<h2>What a SWMS for ${esc(t.plural.toLowerCase())} should include</h2>
+<p>Every SWMS needs to name the high-risk construction work being done, the hazards and risks that come with it, and the control measures that will be used, with how they'll be put in place, monitored and reviewed. For ${esc(t.plural.toLowerCase())}, that means writing it around the actual job: the site, the access, the plant and tools on the day, the crew doing the work and anything unusual about the conditions. A generic template that doesn't mention the site is the most common reason a SWMS gets knocked back.</p>
+<div class="tape thin" aria-hidden="true"></div>
+<h2>Common questions</h2>
+${tradeFaq(t).map((f) => `<h3>${esc(f.q)}</h3><p>${esc(f.a)}</p>`).join("\n")}
+<h2>How it works on site</h2>
+<div class="card"><strong>Talk it through.</strong> Describe the job the way you'd brief your offsider. ${esc(cfg.brand)} asks for anything it needs, out loud.</div>
+<div class="card"><strong>Your paperwork or ours.</strong> Use our template with your logo, or upload your company's own SWMS form once and fill it every time.</div>
+<div class="card"><strong>Signed before you start.</strong> Saved signatures go on with a tap. Email the PDF to the builder, print it, or save it to your phone.</div>
+<p><a href="${hubUrl}">What every SWMS must include</a></p>
+${reviewedLine(cfg, today)}`;
+    pages.push({
+      path: `swms-for/${t.slug}/index.html`, url, type: "trade",
+      body: shell(cfg, {
+        url, title, desc, h1: `SWMS for ${t.plural}`,
+        crumbs: [{ name: cfg.brand, url: cfg.baseUrl + "/" }, { name: "SWMS", url: hubUrl }, { name: `SWMS for ${t.plural}`, url }],
+        content, jsonLd: [webPageLd(cfg, url, title, desc, today), faqLd(tradeFaq(t))],
+        ogImage: cfg.tradePhotos?.[t.slug] ? `/img/trades/${t.slug}-share.jpg` : undefined,
+      }),
+    });
+  }
+
+  // ---- Files ----
+  const urls = [cfg.baseUrl + "/", ...pages.map((p) => p.url)];
+  pages.push({ path: "sitemap.xml", url: `${cfg.baseUrl}/sitemap.xml`, type: "file",
+    body: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `  <url><loc>${u}</loc><lastmod>${today}</lastmod></url>`).join("\n")}\n</urlset>\n` });
+  pages.push({ path: "robots.txt", url: `${cfg.baseUrl}/robots.txt`, type: "file",
+    body: `User-agent: *\nAllow: /\nDisallow: /app/\nDisallow: /api/\nSitemap: ${cfg.baseUrl}/sitemap.xml\n` });
+  pages.push({ path: "llms.txt", url: `${cfg.baseUrl}/llms.txt`, type: "file",
+    body: `# ${cfg.brand}\n\n> ${cfg.brand} builds site-specific Safe Work Method Statements (SWMS) for Australian trades from a spoken job description. Hazards and controls come only from content reviewed by a WHS-qualified professional, and crews sign on their phones.\n\n## Guides\n${pages.filter((p) => p.type !== "file").map((p) => `- [${p.url.replace(cfg.baseUrl, "")}](${p.url})`).join("\n")}\n` });
+  return pages;
+}
+
+// ---------- Build gate ----------
+
+export function wordCount(s: string): number {
+  return s.replace(/<[^>]+>/g, " ").split(/\s+/).filter((w) => /[a-z0-9]/i.test(w)).length;
+}
+
+export function lintPages(pages: Page[], cfg: SiteConfig = SITE_DEFAULTS, banned: string[] = []): string[] {
+  const errors: string[] = [];
+  const htmlPages = pages.filter((p) => p.type !== "file");
+  const known = new Set([cfg.baseUrl + "/", ...pages.map((p) => p.url)]);
+  const titles = new Map<string, string>();
+  for (const p of pages) {
+    for (const b of ["PASTE_", "PLACEHOLDER", ...banned]) if (p.body.toLowerCase().includes(b.toLowerCase())) errors.push(`${p.path}: contains "${b}"`);
+  }
+  for (const p of htmlPages) {
+    const b = p.body;
+    const title = b.match(/<title>(.*?)<\/title>/)?.[1] ?? "";
+    const desc = b.match(/<meta name="description" content="(.*?)">/)?.[1] ?? "";
+    if (!title) errors.push(`${p.path}: no title`);
+    if (title.length > 60) errors.push(`${p.path}: title over 60 characters (${title.length})`);
+    if (titles.has(title)) errors.push(`${p.path}: duplicate title with ${titles.get(title)}`);
+    titles.set(title, p.path);
+    if (desc.length < 70 || desc.length > 160) errors.push(`${p.path}: description length ${desc.length} (want 70–160)`);
+    if ((b.match(/<h1>/g) || []).length !== 1) errors.push(`${p.path}: must have exactly one h1`);
+    if (!b.includes(`<link rel="canonical" href="${p.url}">`)) errors.push(`${p.path}: canonical missing or wrong`);
+    if (!b.includes('<html lang="en-AU">')) errors.push(`${p.path}: lang must be en-AU`);
+    const main = b.split("<main>")[1]?.split("</main>")[0] ?? "";
+    if (wordCount(main) < 300) errors.push(`${p.path}: thin content (${wordCount(main)} words, want 300+)`);
+    for (const m of b.matchAll(/<script type="application\/ld\+json">(.*?)<\/script>/g)) {
+      try { JSON.parse(m[1]); } catch { errors.push(`${p.path}: invalid structured data`); }
+    }
+    for (const m of main.matchAll(/<img\b[^>]*>/g)) {
+      const tag = m[0];
+      if (!/\balt="[^"]{10,}"/.test(tag)) errors.push(`${p.path}: image missing a proper alt description`);
+      if (!/\bwidth="\d+"/.test(tag) || !/\bheight="\d+"/.test(tag)) errors.push(`${p.path}: image missing width/height`);
+    }
+    for (const m of main.matchAll(/href="([^"]+)"/g)) {
+      const href = m[1];
+      if (href === cfg.checkPath || href === cfg.signupPath || href === "/") continue;
+      if (href.startsWith(cfg.baseUrl) && !known.has(href)) errors.push(`${p.path}: broken internal link ${href}`);
+    }
+  }
+  return errors;
+}
+
+// ===================== demo =====================
+// Self-test. Module text here is PLACEHOLDER-style test data only — real content comes from the founder's review.
+
+
+const SUMMARY = Array(14).fill("Test summary sentence used only to exercise the page builder and its checks.").join(" ");
+
+const library: Module[] = [
+  {
+    id: "falls-v1", title: "Working at height", hrcwCategoryId: "falls",
+    triggers: ["roof", "ladder", "scaffold", "harness", "height"],
+    hazards: [{ id: "fall-edge", description: "Test hazard: fall from an unprotected edge", risk: "Test risk text", controls: [
+      { id: "c1", text: "Test control: wear harness", level: "ppe" },
+      { id: "c2", text: "Test control: fit edge protection", level: "engineering" },
+    ] }],
+    sources: ["Code of Practice: Managing the risk of falls"], version: 1,
+    status: "reviewed", reviewedBy: "Founder", reviewedAt: "2026-10-22", seoSummary: SUMMARY,
+  },
+  {
+    id: "power-tools-v1", title: "Power tools", hrcwCategoryId: null,
+    triggers: ["grinder", "angle grinder", "drill", "saw"],
+    hazards: [{ id: "grinder-cut", description: "Test cut hazard", risk: "Test", controls: [
+      { id: "c3", text: "Test control: guard fitted", level: "engineering" },
+    ] }],
+    sources: [], version: 1, status: "reviewed", reviewedBy: "Founder", reviewedAt: "2026-10-22",
+  },
+  {
+    id: "electrical-v1", title: "Energised electrical", hrcwCategoryId: "energised-electrical",
+    triggers: ["switchboard"], hazards: [], sources: [], version: 1,
+    status: "reviewed", reviewedBy: "Founder", reviewedAt: "2026-10-22", seoSummary: SUMMARY,
+    specialistReviewRequired: true, // no specialist sign-off yet → must NOT be used or published
+  },
+];
+
+const SIG = "M10 40 L40 10 L70 40 L100 10 L130 40 L160 12";
+
+export function selfTest(): void {
+  // ---- Extraction & selection ----
+  const t = "Re-roofing a two storey house in Proserpine, angle grinder, two of us, it's windy";
+  const brief = parseBrief(t, JSON.stringify({ task: "Re-roof two-storey house", location: "Proserpine", maxHeightMetres: null, equipment: ["angle grinder"], crewSize: 2, siteConditions: ["windy"] }));
+  assert.equal(brief.maxHeightMetres, null);
+  let sel = select(brief, library);
+  assert.equal(nextFollowUp(brief, sel.needsHeight), "Roughly how high off the ground will you be working, in metres?");
+  assert.ok(readBack(brief).endsWith("Correct?"));
+
+  const brief2 = { ...brief, maxHeightMetres: 7 };
+  sel = select(brief2, library);
+  assert.deepEqual(sel.hrcw.map((h) => h.id), ["falls"]);
+  assert.deepEqual(sel.modules.map((m) => m.id), ["falls-v1", "power-tools-v1"]);
+  assert.ok(sel.notCovered.some((f) => f.item === "windy"));

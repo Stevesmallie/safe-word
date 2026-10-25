@@ -1,0 +1,142 @@
+=== safe-word-engine.ts — part 5 of 19. Join all parts in order to get the full file. ===
+
+// Final troubleshooting pass before the form can be sent.
+export function troubleshoot(form: FormTemplate, values: Values, ctx: CheckContext = {}): Issue[] {
+  return form.fields.map((f) => checkField(f, values[f.id], ctx)).filter((x): x is Issue => !!x);
+}
+
+export function troubleshootSummary(issues: Issue[]): string {
+  if (issues.length === 0) return "Had a read through. Looks good to me. Ready to send.";
+  if (issues.length === 1) return `Had a read through. Just one thing: ${issues[0].spoken}`;
+  return `Had a read through. Just ${issues.length} things to sort. First up: ${issues[0].spoken}`;
+}
+
+// What to ask next, in form order.
+export function nextPrompt(form: FormTemplate, values: Values, ctx: CheckContext = {}) {
+  for (const f of form.fields) {
+    if (!(f.id in values) && f.required) return { fieldId: f.id, spoken: f.voicePrompt };
+    const issue = checkField(f, values[f.id], ctx);
+    if (issue) return { fieldId: f.id, spoken: issue.spoken };
+  }
+  return { fieldId: null, spoken: troubleshootSummary([]) };
+}
+
+
+// ===================== commands =====================
+// Everything a person can say to Safe Word. Plain Aussie speech, lots of ways to say each thing.
+// Anything that isn't a command is treated as an answer to the current field.
+
+
+export type Command =
+  // moving around
+  | { type: "next" } | { type: "back" } | { type: "goTo"; field: string } | { type: "whatsLeft" } | { type: "finish" }
+  // answering
+  | { type: "yes" } | { type: "no" } | { type: "keep" } | { type: "skip" } | { type: "undo" }
+  | { type: "change"; field: string; value: string } | { type: "clear"; field: string } | { type: "readField"; field: string }
+  | { type: "addHazard" } | { type: "sameAsLast" }
+  // help, on the user's terms
+  | { type: "help" } | { type: "suggest" } | { type: "useSuggestion" } | { type: "repeat" } | { type: "readBack" } | { type: "check" }
+  // documents
+  | { type: "newSwms" } | { type: "usePaperwork" } | { type: "useTemplate" } | { type: "openOld" }
+  // signing
+  | { type: "sign" } | { type: "redoSignature" } | { type: "whoSigned" } | { type: "passPhone" } | { type: "sendCrewLink" }
+  // getting it out
+  | { type: "send" } | { type: "email" } | { type: "emailTo"; name: string } | { type: "print" } | { type: "save" }
+  // how the app talks
+  | { type: "typeMode" } | { type: "voiceMode" } | { type: "quiet" } | { type: "slower" } | { type: "faster" }
+  | { type: "voice"; gender: "female" | "male" } | { type: "pause" } | { type: "resume" } | { type: "stop" } | { type: "cancel" }
+  | { type: "answer"; text: string };
+
+type Rule = [RegExp, (m: RegExpMatchArray) => Command];
+const fixed = (type: Command["type"]) => () => ({ type } as Command);
+
+const RULES: Rule[] = [
+  // Aussie double negatives first: "yeah nah" means no, "nah yeah" means yes.
+  [/^yeah,? ?nah\b/, fixed("no")],
+  [/^nah,? ?yeah\b/, fixed("yes")],
+
+  [/^(?:change|make|set|update|put)\s+(?:the\s+)?(.+?)\s+(?:to|as)\s+(.+)$/, (m) => ({ type: "change", field: m[1], value: m[2] })],
+  [/^(?:clear|wipe|delete|rub out|scrub|get rid of)\s+(?:the\s+)?(.+)$/, (m) => ({ type: "clear", field: m[1] })],
+  [/^(?:go to|jump to|take me to|back to|open)\s+(?:the\s+)?(.+?)(?:\s+(?:bit|part|section))?$/, (m) =>
+    /(old|last|previous)\s+(swms|report|one|job)/.test(m[1]) ? { type: "openOld" } : { type: "goTo", field: m[1] }],
+  [/^(?:what'?s|what is|read me|read out|tell me)\s+(?:the\s+)?(.+?)(?:\s+say)?$/, (m) =>
+    /^missing$/.test(m[1]) ? { type: "check" } : /^(left|next|to go)$/.test(m[1]) ? { type: "whatsLeft" } : { type: "readField", field: m[1] }],
+  [/^(?:email|send|flick)\s+(?:it|this|that)?\s*(?:over\s+)?to\s+(?:the\s+)?(.+)$/, (m) => ({ type: "emailTo", name: m[1] })],
+  [/^(?:use|switch to|go with)\s+(?:the\s+)?(female|male|woman'?s?|man'?s?|bloke'?s?|lady'?s?)\s*(?:voice)?$/, (m) =>
+    ({ type: "voice", gender: /fem|wom|lad/.test(m[1]) ? "female" : "male" })],
+
+  [/^(next|next one|keep going|carry on|moving on|onwards)$/, fixed("next")],
+  [/^(back|go back|previous|last one|back one)$/, fixed("back")],
+  [/^(what'?s left|how many (to go|left)|what else|anything else)$/, fixed("whatsLeft")],
+  [/^(i'?m done|done|finished|that'?s everything|all done|wrap it up)$/, fixed("finish")],
+
+  [/^(yes|yep|yeah|yup|correct|that'?s right|spot on|too right|righto|sure|ok|okay|go for it|sweet|bang on|yes please|perfect|you bet)$/, fixed("yes")],
+  [/^(no|nope|nah|wrong|that'?s wrong|not quite|not right|no thanks)$/, fixed("no")],
+  [/^(that'?s (all|it|all i'?ve got|enough|fine|all there is)|that'?ll do|leave it( like that| there| as is)?|keep it( as is)?|good as is|good enough|it'?s fine( as is)?|all good|nothing more|no more|she'?ll be right)$/, fixed("keep")],
+  [/^(skip|skip it|skip that|not needed|doesn'?t apply|n\/?a|not applicable|none|no one|nobody)$/, fixed("skip")],
+  [/^(undo|scratch that|take that back|that'?s not what i said|not what i said|undo that|go back on that)$/, fixed("undo")],
+  [/^(add (a|another) hazard|there'?s another hazard|one more hazard|new hazard)$/, fixed("addHazard")],
+  [/^(same as (last|the last) (job|time|one)|same as yesterday|same site( as last time)?|copy (the )?last (job|one))$/, fixed("sameAsLast")],
+
+  [/^(help|i don'?t know|not sure|what do you need|what do i say|what goes here|what do i put)$/, fixed("help")],
+  [/^(suggest something|give me a suggestion|what would you put|any ideas|got a suggestion|suggestion)$/, fixed("suggest")],
+  [/^(use that|that'?ll work|put that in|go with that|use the suggestion|yeah use that)$/, fixed("useSuggestion")],
+  [/^(repeat|say that again|what was that|pardon|come again|sorry|what)$/, fixed("repeat")],
+  [/^(read it back|read back|what have you got|read it out|read the lot)$/, fixed("readBack")],
+  [/^(check|check it|check it over|have a look|look over it|am i done|is it done|what'?s missing|anything missing)$/, fixed("check")],
+
+  [/^(new swms|new one|start a new one|new job|fresh one|start again|start fresh)$/, fixed("newSwms")],
+  [/^(use my (paperwork|form|company form|own form|template)|use (our|the company) (form|paperwork))$/, fixed("usePaperwork")],
+  [/^(use the (template|standard one|safe word one|normal one|generic one))$/, fixed("useTemplate")],
+  [/^(open (an )?old (one|report|swms)|use an old (one|report|swms)|start from an old (one|report))$/, fixed("openOld")],
+
+  [/^(sign|sign it|sign here|add my signature|put my signature on|signature)$/, fixed("sign")],
+  [/^(redo my signature|new signature|change my signature|do my signature again)$/, fixed("redoSignature")],
+  [/^(who'?s signed|who has signed|who still needs to sign|who'?s left( to sign)?|has everyone signed)$/, fixed("whoSigned")],
+  [/^(pass the phone( around)?|crew (to )?sign|crew'?s turn|hand it round)$/, fixed("passPhone")],
+  [/^(send the (crew|boys|team|guys) the link|text the (crew|team|boys)|send (the )?link)$/, fixed("sendCrewLink")],
+
+  [/^(send|send it|send it off|fire it off)$/, fixed("send")],
+  [/^(email|email it|email that)$/, fixed("email")],
+  [/^(print|print it|print that|print a copy)$/, fixed("print")],
+  [/^(save|save it|save to (my )?phone|download|keep a copy)$/, fixed("save")],
+
+  [/^(type|i'?ll type|let me type|keyboard|switch to typing|text mode)$/, fixed("typeMode")],
+  [/^(voice|talk|switch to voice|voice mode|i'?ll talk)$/, fixed("voiceMode")],
+  [/^(quiet|be quiet|shush|shh+|mute|voice off|go quiet|stop talking)$/, fixed("quiet")],
+  [/^(slow down|slower|too fast|bit slower)$/, fixed("slower")],
+  [/^(speed up|faster|bit faster|quicker)$/, fixed("faster")],
+  [/^(hang on|give me a (sec|second|minute)|one sec|wait|hold on|just a sec)$/, fixed("pause")],
+  [/^(ok go|go on|righto go|ready|i'?m back|carry on then)$/, fixed("resume")],
+  [/^(stop)$/, fixed("stop")],
+  [/^(cancel|forget it|never mind|don'?t worry about it)$/, fixed("cancel")],
+];
+
+export function parseCommand(utterance: string): Command {
+  const u = utterance.trim().toLowerCase().replace(/[.!?,]+$/g, "").replace(/\s+/g, " ");
+  for (const [re, make] of RULES) {
+    const m = u.match(re);
+    if (m) return make(m);
+  }
+  return { type: "answer", text: utterance.trim() };
+}
+
+// Everyday names people use for each field.
+const FIELD_ALIASES: Partial<Record<StandardKey, string[]>> = {
+  businessName: ["business", "company", "business name", "company name"],
+  abn: ["abn", "business number"],
+  principalContractor: ["builder", "principal contractor", "head contractor", "contractor"],
+  siteAddress: ["address", "site", "site address", "job address", "location"],
+  workDescription: ["job", "work", "job description", "work activity", "task", "description"],
+  hrcw: ["high risk", "high-risk work", "high risk work"],
+  hazards: ["hazards", "controls", "hazards and controls", "risks"],
+  responsiblePerson: ["responsible person", "supervisor", "who's responsible", "person responsible"],
+  reviewTrigger: ["review", "review date", "when to review"],
+  datePrepared: ["date"],
+  businessAddress: ["business address", "company address", "office address"],
+  controlMonitoring: ["monitoring", "checks", "control checks"],
+  dateProvided: ["date provided", "date it went to the builder"],
+  authorSignature: ["my signature"],
+  crewSignatures: ["crew signatures", "crew sign off", "sign off"],
+  logo: ["logo"],
+};

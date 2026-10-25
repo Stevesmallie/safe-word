@@ -1,0 +1,55 @@
+=== safe-word-engine.ts — part 13 of 19. Join all parts in order to get the full file. ===
+
+// Trade pages. Intros are DRAFTS for the founder to check; set reviewed: true to publish.
+export interface TradeContent { slug: string; name: string; plural: string; activities: string[]; intro: string; reviewed: boolean; photoAlt?: string }
+
+export const TRADES: TradeContent[] = [
+  { slug: "roofers", name: "Roofer", plural: "Roofers", activities: ["falls", "asbestos", "energised-electrical", "mobile-plant"], reviewed: false, photoAlt: "A roofer in a harness clipped to an anchor, fixing Colorbond sheets beside scaffold edge protection",
+    intro: "Most roofing jobs involve high-risk construction work, usually the risk of a fall from height. Older roofs can also mean disturbing asbestos, and overhead power lines are a common hazard near the eaves. A roofing SWMS needs to reflect the actual roof: its pitch, edges, fragile areas such as skylights, and how materials get up and down. Principal contractors will usually ask for it before you start. Safe Word builds it from what you say on site, then flags anything the reviewed content doesn't cover so you can add your own control before the crew signs." },
+  { slug: "electricians", name: "Electrician", plural: "Electricians", activities: ["energised-electrical", "falls", "confined-space", "asbestos"], reviewed: false, photoAlt: "A residential switchboard isolated with a lockout padlock and danger tag on the main switch",
+    intro: "Electrical work near energised installations is high-risk construction work, and a lot of sparky jobs add work at height, ceiling spaces or older switchboards that may contain asbestos. An electrical SWMS needs to show how the work will be isolated and tested, who is doing it and what happens if isolation isn't possible. Safe Word turns your spoken job brief into a site-specific SWMS, using electrical content that has had a specialist review, and won't let anyone sign while a hazard is left uncovered." },
+  { slug: "plumbers", name: "Plumber", plural: "Plumbers", activities: ["trench-tunnel", "confined-space", "gas-mains", "falls", "asbestos"], reviewed: false, photoAlt: "A plumber laying PVC pipe inside trench shields, spoil set well back and barricade mesh along both sides",
+    intro: "Plumbing and drainage work often crosses into high-risk construction work: trenches deeper than 1.5 metres, pits and tanks, gas lines, roof work and old fibro. A plumbing SWMS has to match the job on the day, not a template from last year. Talk Safe Word through the job and it pulls in the right sections, asks for anything it needs, and gives you a signed, time-stamped SWMS to send to the builder." },
+  { slug: "carpenters", name: "Carpenter", plural: "Carpenters", activities: ["falls", "temp-support", "demolition", "mobile-plant"], reviewed: false, photoAlt: "Carpenters standing up a timber wall frame on a slab, nail gun on the floor",
+    intro: "Framing, fit-outs and renovations regularly involve work at height, structural alterations that need temporary support, and partial demolition. A carpentry SWMS needs to cover the stages of the job that are genuinely high risk and how each one will be controlled. Safe Word builds it from your description, puts it on your own paperwork or our template, and gets the whole crew signed off on their phones." },
+  { slug: "concreters", name: "Concreter", plural: "Concreters", activities: ["mobile-plant", "trench-tunnel", "tilt-up-precast", "traffic-corridor"], reviewed: false, photoAlt: "Concreters screeding a fresh slab with a bull float as the pump hose pours",
+    intro: "Concreting jobs commonly involve powered mobile plant such as pumps, trucks and bobcats, as well as excavations, precast elements and work next to roads. A concreting SWMS needs to deal with plant movement, exclusion zones and pour-day pressure. Safe Word gets the details from a quick spoken brief and builds a SWMS that fits the site, with every gap flagged before anyone signs." },
+  { slug: "scaffolders", name: "Scaffolder", plural: "Scaffolders", activities: ["falls", "energised-electrical", "traffic-corridor", "mobile-plant"], reviewed: false, photoAlt: "A scaffolder in a harness on a scaffold deck with guardrails, shot from below",
+    intro: "Erecting, altering and dismantling scaffold is work at height by definition, and it often happens near power lines, public footpaths and live traffic. A scaffolding SWMS needs to cover the sequence of work and the controls at each stage. Safe Word builds a site-specific version from your voice brief and keeps a signed copy with the job, ready for the principal contractor or an inspector." },
+  { slug: "painters", name: "Painter", plural: "Painters", activities: ["falls", "contaminated-atmosphere", "asbestos"], reviewed: false, photoAlt: "A painter rolling weatherboards from a mobile scaffold with guardrails",
+    intro: "Not every painting job needs a SWMS, but work at height, spraying in enclosed areas and preparing surfaces that may contain asbestos all count as high-risk construction work. Safe Word tells you when the job you've described doesn't involve high-risk work, and when it does, builds a SWMS that matches the site in minutes." },
+  { slug: "demolition-contractors", name: "Demolition Contractor", plural: "Demolition Contractors", activities: ["demolition", "asbestos", "mobile-plant", "temp-support", "falls"], reviewed: false, photoAlt: "A worker hosing down brick demolition rubble to keep dust down while an excavator works behind temporary fencing",
+    intro: "Demolition of load-bearing elements is high-risk construction work and rarely comes alone: asbestos, plant, propping and falls usually feature too. A demolition SWMS has to reflect the structure, the sequence and the exclusion zones. Safe Word turns your spoken plan into a structured SWMS from reviewed content and flags anything it can't cover so it's dealt with before work starts." },
+];
+
+const FAQ_ACTIVITY = (name: string) => [
+  { q: `Do I need a SWMS for ${name.toLowerCase()} work?`, a: `Yes, if the work falls within one of the 18 high-risk construction work activities in the model WHS Regulations. A SWMS must be prepared before the work starts.` },
+  { q: "Does the principal contractor need a copy?", a: "Yes. A principal contractor must take all reasonable steps to obtain the SWMS before high-risk construction work begins." },
+  { q: "Can one SWMS cover more than one high-risk activity?", a: "Yes. One SWMS can cover several high-risk activities on the same job, for example work at height next to moving plant." },
+  { q: "What happens if the SWMS isn't followed?", a: "The work must stop immediately, or as soon as it is safe to do so, and the SWMS must be reviewed before work continues." },
+];
+
+const tradeFaq = (t: TradeContent) => [
+  { q: `Do ${t.plural.toLowerCase()} need a SWMS for every job?`, a: "Only for jobs that involve high-risk construction work. If none of the 18 activities apply, a SWMS isn't legally required, though the risks still need managing." },
+  { q: "Can I use my company's own SWMS form?", a: "Yes. Upload your form once and it's saved in your paperwork dashboard, ready to be filled by voice on every job." },
+  { q: "Who signs the SWMS?", a: "The workers doing the high-risk work sign to confirm they've read it and will follow it. Each person signs with their own saved signature." },
+];
+
+const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const clip = (s: string, n: number) => (s.length <= n ? s : s.slice(0, n - 1).replace(/\s+\S*$/, "") + "…");
+
+export interface Page { path: string; url: string; type: "hub" | "activity" | "trade" | "file"; body: string }
+
+const CSS = `:root{--ink:#0e1726;--muted:#4a5568;--line:#e5e7eb;--brand:#0b5fff;--bg:#fff;--soft:#f6f8fb}
+@media (prefers-color-scheme:dark){:root{--ink:#e8edf5;--muted:#a0aec0;--line:#243041;--brand:#5b8cff;--bg:#0b111b;--soft:#121a27}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+main{max-width:760px;margin:0 auto;padding:24px 16px 64px}header,footer{max-width:760px;margin:0 auto;padding:16px}
+a{color:var(--brand)}nav.crumbs{font-size:14px;color:var(--muted)}nav.crumbs a{color:inherit}
+h1{font-size:clamp(30px,6vw,44px);line-height:1.1;letter-spacing:-.02em;margin:12px 0 16px}h2{font-size:24px;margin:40px 0 12px;letter-spacing:-.01em}h3{font-size:18px;margin:24px 0 6px}
+.lede{font-size:19px;color:var(--muted)}.cta{display:inline-block;background:var(--brand);color:#fff;padding:14px 22px;border-radius:12px;text-decoration:none;font-weight:600;margin:8px 0}
+.card{background:var(--soft);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:16px 0}
+ul.grid{list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}ul.grid li{border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.reviewed{font-size:14px;color:var(--muted)}small{color:var(--muted)}
+.tape{height:14px;position:relative;background:#e3ff00}.tape::after{content:"";position:absolute;left:0;right:0;top:4px;height:6px;background:linear-gradient(100deg,rgba(255,255,255,0) 30%,rgba(255,255,255,.75) 45%,rgba(255,255,255,0) 60%),repeating-linear-gradient(45deg,rgba(0,0,0,.07) 0 1px,transparent 1px 3px),repeating-linear-gradient(-45deg,rgba(0,0,0,.07) 0 1px,transparent 1px 3px),linear-gradient(#d9dde3,#aeb4bd)}
+.tape.thin{height:8px;margin:40px 0 0}.tape.thin::after{top:2px;height:4px}
+.photo{width:100%;height:auto;border-radius:14px;margin:8px 0 16px;display:block;background:var(--soft)}`;

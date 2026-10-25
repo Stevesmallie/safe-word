@@ -1,0 +1,137 @@
+=== safe-word-screens.html — part 8 of 9. Join all parts in order to get the full file. ===
+    welcome: makePad($('#padWelcome'), ok => $('#welcomeGo').disabled = !ok),
+    pass: makePad($('#padPass'), ok => $('#passGo').disabled = !ok)
+  };
+
+  /* ---------------- talk: scripted sample job ---------------- */
+  const STEPS = [
+    { app: "Morning. What's the job, and where is it?",
+      me: "Re-roofing at 14 Ocean Street Mooloolaba. Single storey, pulling the old tin off and putting new sheets on. Gutter's about three and a half metres up.",
+      title: 'Roof sheet replacement',
+      fill: { 'f-site': '14 Ocean Street, Mooloolaba QLD 4557',
+              'f-work': 'Removal of existing corrugated metal roof sheeting and installation of new sheeting to a single-storey dwelling. Eave height approx. 3.5 m.',
+              'f-hrcw': 'Risk of a person falling more than 2 m' } },
+    { app: "Got it. Who's the builder on this one?",
+      me: "Coastline Builders. Tom Reid's the super.",
+      fill: { 'f-pc': 'Coastline Builders. Site supervisor: Tom Reid' } },
+    { app: "And who's making sure the controls get done?",
+      me: "That's me.",
+      fill: { 'f-resp': 'Dave Brown, Supervisor, Brown Roofing' } },
+  ];
+  let step = 0, busy = false, talkStarted = false;
+  const convo = $('#convo');
+  function sayApp(text) {
+    const el = document.createElement('div'); el.className = 'say say--app';
+    el.innerHTML = `<span class="who"><span class="wave">${'<b></b>'.repeat(4)}</span></span><p></p>`;
+    $('p', el).textContent = text; convo.appendChild(el); convo.scrollTop = convo.scrollHeight;
+    speakWave($('.wave', el), 1400);
+  }
+  function speakWave(w, ms) {
+    const bars = $$('b', w); const end = performance.now() + (reduce ? 0 : ms);
+    (function tick() { const on = performance.now() < end; bars.forEach(b => b.style.height = on ? (25 + Math.random() * 75) + '%' : '35%'); if (on) setTimeout(tick, 90); })();
+  }
+  function nextField() {
+    $$('.fld.next').forEach(f => f.classList.remove('next'));
+    const n = STEPS[step] && Object.keys(STEPS[step].fill)[0];
+    if (n) $('#' + n).classList.add('next');
+  }
+  async function fill(map) {
+    for (const [id, text] of Object.entries(map)) {
+      const f = $('#' + id); const dd = $('dd', f);
+      f.classList.remove('next');
+      dd.innerHTML = '<span class="hl"></span>'; $('.hl', dd).textContent = text;
+      $('#talkDoc').scrollTo({ top: f.offsetTop - 40, behavior: reduce ? 'auto' : 'smooth' });
+      await wait(520);
+    }
+  }
+  async function runStep(text) {
+    if (busy || step >= STEPS.length) return; busy = true;
+    const S = STEPS[step], mic = $('#talkMic'), state = $('#micState');
+    const me = document.createElement('div'); me.className = 'say say--me';
+    convo.appendChild(me);
+    if (text == null) {
+      mic.classList.add('listening'); state.innerHTML = '<span class="wave" style="color:var(--hv)">' + '<b></b>'.repeat(7) + '</span>';
+      speakWave($('.wave', state), 2400);
+      const words = S.me.split(' ');
+      for (let i = 1; i <= words.length; i++) {
+        me.innerHTML = words.slice(0, i).join(' ') + (i < words.length ? ' <span class="live">…</span>' : '');
+        convo.scrollTop = convo.scrollHeight; await wait(70 + Math.random() * 60);
+      }
+      mic.classList.remove('listening');
+    } else { me.textContent = text; convo.scrollTop = convo.scrollHeight; }
+    state.textContent = 'Got it'; await wait(350);
+    if (S.title) $('#jobTitle').textContent = S.title;
+    await fill(S.fill);
+    step++; nextField(); busy = false;
+    if (step < STEPS.length) { state.textContent = 'Tap to talk'; await wait(250); sayApp(STEPS[step].app); }
+    else finishTalk();
+  }
+  function finishTalk() {
+    $('#micState').textContent = 'Details are in';
+    sayApp("That's the details sorted. I've pulled the hazards from what you said. Want a look?");
+    const b = document.createElement('button'); b.className = 'btn btn--hv btn--sm say-cta'; b.textContent = 'See hazards'; b.dataset.go = 'hazards';
+    convo.appendChild(b); convo.scrollTop = convo.scrollHeight;
+  }
+  async function thatsAll() {
+    if (busy) return; busy = true;
+    while (step < STEPS.length) { if (STEPS[step].title) $('#jobTitle').textContent = STEPS[step].title; await fill(STEPS[step].fill); step++; }
+    busy = false; nextField(); finishTalk();
+  }
+  function startTalk() {
+    if (talkStarted) return; talkStarted = true;
+    setTimeout(() => { sayApp(STEPS[0].app); nextField(); }, reduce ? 0 : 380);
+  }
+
+  /* ---------------- sign ---------------- */
+  function hash(str) { let h1 = 0x811c9dc5; for (const c of str) { h1 ^= c.charCodeAt(0); h1 = Math.imul(h1, 16777619); } return (h1 >>> 0).toString(16).toUpperCase().padStart(8, '0'); }
+  function nowStr() { const d = new Date(); let h = d.getHours(), m = String(d.getMinutes()).padStart(2, '0'); const ap = h >= 12 ? 'pm' : 'am'; h = h % 12 || 12; return `${h}:${m}${ap}`; }
+  function putSig(rowId, strokes) {
+    const row = $('#' + rowId); row.classList.add('signed');
+    const pp = $('.pp', row); if (pp) pp.remove();
+    drawFitted($('.slot canvas', row), strokes, getComputedStyle(document.documentElement).getPropertyValue('--sig-ink').trim() || '#1E2F7A');
+    const st = document.createElement('small'); st.className = 'stamp num'; st.textContent = `Signed ${nowStr()} · #${hash(rowId + JSON.stringify(strokes).length).slice(0, 6)}`;
+    $('div', row).appendChild(st);
+    checkAllSigned();
+  }
+  let passWho = null;
+  function checkAllSigned() {
+    const all = ['s-author', 's-dave', 's-mia', 's-jack'].every(id => $('#' + id).classList.contains('signed'));
+    $('#toSend').disabled = !all;
+    if (all && !$('#allSigned').classList.contains('on')) {
+      $('#lockLine').textContent = `3 of 3 crew · locked to this version · #${hash('BR-0143' + Date.now()).slice(0, 8)}`;
+      $('#allSigned').classList.add('on'); $('#meCard').hidden = true; $('#signScroll').scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+    }
+  }
+
+  /* ---------------- per-screen setup ---------------- */
+  const onEnter = {
+    home() { const d = new Date(); $('#today').textContent = d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '') + ' · ' + nowStr(); },
+    talk() { startTalk(); },
+    sign() { if (!sig.me) sig.me = fakeSig(0); requestAnimationFrame(() => drawFitted($('#meSig'), sig.me, '#F2F5F8')); }
+  };
+
+  /* ---------------- events ---------------- */
+  app.addEventListener('click', e => {
+    const t = e.target.closest('button,a'); if (!t) return;
+    if (t.matches('[data-back]')) return goBack();
+    if (t.dataset.go) return show(t.dataset.go);
+    if (t.dataset.cmd) return cmd(t.dataset.cmd);
+    if (t.dataset.ro) return ro(t.dataset.ro, t.dataset.v);
+    if (t.dataset.pass) { passWho = t.dataset.pass; $('#passName').textContent = passWho === 'mia' ? 'Mia' : 'Jack'; pads.pass.reset(); return openSheet('sheetPass'); }
+    if (t.hasAttribute('data-opt')) { t.setAttribute('aria-pressed', t.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); const n = $$('[data-opt][aria-pressed="true"]').length; $('#sendBtn').disabled = !n; return; }
+    switch (t.dataset.act) {
+      case 'open-sign': openSheet('sheetSign'); break;
+      case 'close-sheet': closeSheets(); break;
+      case 'terms': e.preventDefault(); toast('Terms open here, one short page'); break;
+      case 'save-sig': sig.me = pads.welcome.strokes.map(s => s.slice()); show('home'); setTimeout(() => toast('Signature saved'), 300); break;
+      case 'soon': toast('Not part of this preview'); break;
+      case 'say': toast('Listening… say it your way'); break;
+      case 'add-power': {
+        const a = $('#hzAmber'); const n = document.createElement('div'); n.className = 'hz new';
+        n.innerHTML = '<div class="hz-top"><h3>Overhead power line</h3><span class="risk">High</span></div><div class="ctrl"><svg class="ico"><use href="#i-check"/></svg><span><em>Admin · added just now</em>Energy provider contacted to make the service line safe before work starts. Nobody works inside the exclusion zone.</span></div>';
+        a.replaceWith(n); toast('Added'); break; }
+      case 'keep-power': {
+        const a = $('#hzAmber'); a.className = 'ro-ok'; a.innerHTML = '<svg class="ico" style="color:var(--muted)"><use href="#i-check"/></svg><span>Overhead power kept as is. You can come back to it any time.</span>'; break; }
+      case 'sign-me': if ($('#s-author').classList.contains('signed')) break; t.disabled = true; t.innerHTML = '<svg class="ico"><use href="#i-check"/></svg>Signed'; if (!sig.me) sig.me = fakeSig(0); putSig('s-author', sig.me); setTimeout(() => putSig('s-dave', sig.me), reduce ? 0 : 260); toast('Signed both places'); break;
+      case 'pass-sign': { const s = pads.pass.strokes.map(x => x.slice()); closeSheets(); setTimeout(() => putSig('s-' + passWho, s), reduce ? 0 : 280); break; }
+      case 'send': doSend(t); break;

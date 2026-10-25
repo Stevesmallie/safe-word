@@ -1,0 +1,140 @@
+=== safe-word-screens.html — part 5 of 9. Join all parts in order to get the full file. ===
+      <button class="btn btn--hv btn--block" id="welcomeGo" disabled data-act="save-sig">Sign and get started</button>
+    </div>
+  </section>
+
+  <!-- ===================== 1. HOME ===================== -->
+  <section class="screen" data-screen="home" aria-label="Home">
+    <div class="scroll">
+      <header class="home-hero">
+        <img src="assets/home-hands-1290.webp" srcset="assets/home-hands-768.webp 768w, assets/home-hands-1290.webp 1290w" sizes="(min-width:640px) 440px, 100vw" alt="Gloved hands holding a phone beside a fresh concrete slab">
+        <div class="tape tape--top" style="position:relative;z-index:1"></div>
+        <div class="home-top">
+          <div class="co"><span class="co-logo">BR</span>Brown Roofing</div>
+          <button class="avatar" aria-label="Your account">DB</button>
+        </div>
+        <div class="greet">
+          <p class="eyebrow num" id="today">Sun 25 Oct · 6:04am</p>
+          <h1 class="display d-lg">Morning, Dave.</h1>
+        </div>
+      </header>
+      <button class="startcard" data-go="choose">
+        <span class="mic mic--md" aria-hidden="true"><svg class="ico"><use href="#i-mic"/></svg></span>
+        <span class="t"><span class="display d-sm" style="display:block">Start a SWMS</span><p class="muted">Tap and talk, or type it.</p></span>
+        <svg class="ico" style="color:var(--muted)"><use href="#i-chev"/></svg>
+      </button>
+
+      <div class="section">
+        <div class="section-head"><h2 class="label">Pick up where you left off</h2></div>
+        <button class="draft" data-go="talk">
+          <div class="draft-top">
+            <div><h3>Gutter and fascia replacement</h3><p>22 Parkyn Pde, Mooloolaba</p></div>
+            <span class="status status--draft">Draft</span>
+          </div>
+          <div class="meter"><i style="width:69%"></i></div>
+          <p class="fine num">11 of 16 filled · last touched yesterday 3:40pm</p>
+        </button>
+      </div>
+
+      <div class="section" style="padding-bottom:28px">
+        <div class="tape tape--div"></div>
+        <div class="section-head" style="margin-top:8px"><h2 class="label">Recent</h2><button class="btn--text" style="font-size:15px;color:var(--blue)">See all</button></div>
+        <div class="list">
+          <button class="row"><span class="doc-ico"></span><span class="t"><h3>Skylight install</h3><p>3 Kings Rd, Buderim · Thu</p></span><span class="status status--sent">Sent</span></button>
+          <button class="row"><span class="doc-ico"></span><span class="t"><h3>Re-roof, two storey</h3><p>8 Brisbane Rd, Alexandra Hdl · Tue</p></span><span class="status status--signed">Signed</span></button>
+          <button class="row"><span class="doc-ico"></span><span class="t"><h3>Whirlybird and flashing</h3><p>41 Coral St, Maroochydore · 14 Oct</p></span><span class="status status--sent">Sent</span></button>
+        </div>
+      </div>
+    </div>
+    <nav class="tabbar" aria-label="Main">
+      <button class="tab on" aria-current="page"><svg class="ico"><use href="#i-home"/></svg>Home</button>
+      <button class="tab" data-act="soon"><svg class="ico"><use href="#i-jobs"/></svg>Jobs</button>
+      <button class="tab" data-act="soon"><svg class="ico"><use href="#i-folder"/></svg>Paperwork</button>
+      <button class="tab" data-act="soon"><svg class="ico"><use href="#i-user"/></svg>Me</button>
+    </nav>
+  </section>
+
+  <!-- ===================== 2. CHOOSE PAPERWORK ===================== -->
+  <section class="screen" data-screen="choose" aria-label="Choose paperwork">
+    <div class="tape tape--top"></div>
+    <div class="bar"><button class="iconbtn" data-back aria-label="Back"><svg class="ico"><use href="#i-back"/></svg></button></div>
+    <div class="scroll">
+      <div class="page-head"><p class="eyebrow">New SWMS</p><h1 class="display d-lg">Which paperwork?</h1></div>
+      <div class="choose">
+        <button class="form-opt" data-go="talk">
+          <span class="mini"><b class="co2" style="width:55%"></b><i></i><i class="s"></i><i></i><i></i><i class="s"></i><i></i></span>
+          <span class="t"><h3>Safe Word SWMS</h3><p>Our standard form with the Brown Roofing logo on it.</p><span class="tag">You use this most</span></span>
+        </button>
+        <button class="form-opt" data-go="talk">
+          <span class="mini"><b style="width:80%"></b><i></i><i></i><i class="s"></i><i></i><i></i><i class="s"></i></span>
+          <span class="t"><h3>Coastline Builders SWMS</h3><p>The builder's own form. We fill it in for you.</p></span>
+        </button>
+        <button class="form-opt" data-go="talk">
+          <span class="iconbtn" style="width:62px;height:62px;border-radius:14px"><svg class="ico"><use href="#i-copy"/></svg></span>
+          <span class="t"><h3>Copy an old one</h3><p>Start from Skylight install and change what's different.</p></span>
+        </button>
+        <button class="form-opt form-opt--dash" data-act="soon">
+          <span class="iconbtn"><svg class="ico"><use href="#i-upload"/></svg></span>
+          <span class="t"><h3>Add other paperwork</h3><p>Photo, PDF or Word file. It's saved for next time.</p></span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 3. TALK ===================== -->
+  <section class="screen" data-screen="talk" aria-label="Talk it through">
+    <div class="tape tape--top"></div>
+    <div class="bar">
+      <button class="iconbtn" data-back aria-label="Back"><svg class="ico"><use href="#i-back"/></svg></button>
+      <div class="bar-title"><p class="eyebrow">Safe Word SWMS</p><h1 id="jobTitle">New job</h1></div>
+      <span class="saved"><i></i>Saved</span>
+    </div>
+    <div class="talk-doc" id="talkDoc">
+      <article class="paper" aria-label="SWMS document">
+        <div class="paper-head">
+          <div class="logo-br">Brown<br>Roofing<small>Est. 2009</small></div>
+          <div class="paper-title"><strong>Safe Work Method Statement</strong><span class="num">BR-0143 · Prepared 25/10/2026</span></div>
+        </div>
+        <dl style="margin:0">
+          <div class="fld"><dt>Business</dt><dd>Brown Roofing · 0412 555 018</dd></div>
+          <div class="fld" id="f-site"><dt>Site address</dt><dd></dd></div>
+          <div class="fld" id="f-work"><dt>Work</dt><dd></dd></div>
+          <div class="fld" id="f-hrcw"><dt>High-risk work</dt><dd></dd></div>
+          <div class="fld" id="f-pc"><dt>Principal contractor</dt><dd></dd></div>
+          <div class="fld" id="f-resp"><dt>Person responsible</dt><dd></dd></div>
+          <div class="fld"><dt>Hazards &amp; controls</dt><dd style="color:var(--paper-mute);font-size:13px">Next, from what you say</dd></div>
+        </dl>
+      </article>
+    </div>
+    <div class="talk-panel">
+      <div class="convo" id="convo" aria-live="polite"></div>
+      <div class="dock" id="dock">
+        <div class="cmds" id="cmds">
+          <button class="chip" data-cmd="thatsall">That's all</button>
+          <button class="chip" data-cmd="readback">Read it back</button>
+          <button class="chip" data-cmd="skip">Skip this one</button>
+          <button class="chip" data-cmd="info"><svg class="ico" style="width:18px;height:18px"><use href="#i-info"/></svg>What goes here?</button>
+        </div>
+        <div class="mic-row">
+          <button class="side" data-cmd="type" aria-label="Type instead"><span class="iconbtn"><svg class="ico"><use href="#i-kb"/></svg></span>Type</button>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:10px">
+            <button class="mic" id="talkMic" aria-label="Tap to talk"><svg class="ico"><use href="#i-mic"/></svg></button>
+            <span class="mic-state" id="micState">Tap to talk</span>
+          </div>
+          <button class="side" data-go="hazards" aria-label="Go to hazards"><span class="iconbtn"><svg class="ico"><use href="#i-alert"/></svg></span>Hazards</button>
+        </div>
+        <form class="typebox" id="typebox"><input id="typeIn" autocomplete="off" placeholder="Type it how you'd say it"><button class="iconbtn" style="background:var(--hv);color:var(--hv-ink);box-shadow:none;width:56px;height:56px" aria-label="Add"><svg class="ico"><use href="#i-send"/></svg></button></form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 4. HAZARDS ===================== -->
+  <section class="screen" data-screen="hazards" aria-label="Hazards and controls">
+    <div class="tape tape--top"></div>
+    <div class="bar">
+      <button class="iconbtn" data-back aria-label="Back"><svg class="ico"><use href="#i-back"/></svg></button>
+      <div class="bar-title"><p class="eyebrow">Roof sheet replacement</p><h1>Hazards &amp; controls</h1></div>
+      <span class="saved"><i></i>Saved</span>
+    </div>
+    <div class="scroll">
+      <div class="page-head"><p class="lede" style="font-size:17px">Pulled from what you said. Tap any line to change it.</p></div>

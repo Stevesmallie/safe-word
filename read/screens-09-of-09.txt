@@ -1,0 +1,49 @@
+=== safe-word-screens.html — part 9 of 9. Join all parts in order to get the full file. ===
+      case 'restart': $('#doneWrap').classList.remove('on'); stack.length = 0; show('home', {push:false, back:true}); break;
+    }
+  });
+  function cmd(c) {
+    if (c === 'thatsall') return thatsAll();
+    if (c === 'skip') { if (busy || step >= STEPS.length) return; step++; nextField(); if (step < STEPS.length) sayApp('No worries, we can come back to it. ' + STEPS[step].app); else finishTalk(); return; }
+    if (c === 'readback') return toast('Reading it back to you…');
+    if (c === 'info') { const k = STEPS[step] ? Object.keys(STEPS[step].fill)[0] : null; const tips = { 'f-site': 'The street address, so anyone can find the job.', 'f-pc': "The builder running the site, if there is one.", 'f-resp': 'Whoever makes sure the controls happen. Often you.' }; return toast(tips[k] || 'Say it how you would to a mate'); }
+    if (c === 'type') { $('#dock').classList.add('typing'); $('#typeIn').focus(); }
+  }
+  $('#typebox').addEventListener('submit', e => { e.preventDefault(); const v = $('#typeIn').value.trim(); $('#dock').classList.remove('typing'); $('#typeIn').value = ''; if (v) runStep(v); });
+  $('#typeIn').addEventListener('blur', () => setTimeout(() => { if (!$('#typeIn').value) $('#dock').classList.remove('typing'); }, 150));
+  $('#talkMic').addEventListener('click', () => runStep(null));
+  function ro(id, v) {
+    const el = $('#' + id); el.classList.add(v);
+    $('.result span', el).textContent = v === 'done' ? 'Added' : 'Kept as is';
+    const done = $$('.ro.done').length; const n = 14 + done;
+    $('#ringNum').innerHTML = `${n}<small>of 16</small>`;
+    $('#ringFg').style.strokeDashoffset = 226.2 * (1 - n / 16);
+  }
+  async function doSend(btn) {
+    const opts = $$('[data-opt][aria-pressed="true"]').map(o => $('h3', o).textContent);
+    btn.disabled = true; btn.innerHTML = '<span class="sending"><span class="spin"></span>Sending</span>';
+    await wait(1100);
+    const also = opts.filter(o => !o.startsWith('Email')); $('#alsoLine').textContent = also.length ? also.join(', ') : 'Nothing else';
+    const emailed = opts.some(o => o.startsWith('Email'));
+    $('.done-card h2').textContent = emailed ? 'Sent to Tom.' : 'All done.';
+    $('#sentTime').textContent = nowStr();
+    $('#doneWrap').classList.add('on');
+    btn.disabled = false; btn.innerHTML = '<svg class="ico"><use href="#i-send"/></svg>Send';
+  }
+
+  /* ---------------- preview picker ---------------- */
+  function renderPv() {
+    $('#pvNow').textContent = `${ORDER.indexOf(current) + 1}/8 · ${NAMES[current]}`;
+    $('#pvMenu').innerHTML = ORDER.map((s, i) => `<button data-pv="${s}" aria-current="${s === current}"><span>${i + 1}</span>${NAMES[s]}</button>`).join('');
+  }
+  $('#pvBtn').addEventListener('click', e => { e.stopPropagation(); const p = $('#pv'); p.classList.toggle('open'); $('#pvBtn').setAttribute('aria-expanded', p.classList.contains('open')); });
+  $('#pvMenu').addEventListener('click', e => { const b = e.target.closest('[data-pv]'); if (!b) return; e.stopPropagation(); $('#pv').classList.remove('open'); stack.length = 0; if (b.dataset.pv !== 'welcome') stack.push('home'); show(b.dataset.pv, {push:false}); });
+  document.addEventListener('click', e => { if (!e.target.closest('#pv')) $('#pv').classList.remove('open'); });
+  window.addEventListener('resize', () => { pads.welcome.fit(); pads.pass.fit(); if (current === 'sign' && sig.me) drawFitted($('#meSig'), sig.me, '#F2F5F8'); });
+
+  renderPv();
+  const start = (location.hash || '').slice(1);
+  if (ORDER.includes(start) && start !== 'welcome') { stack.push('home'); show(start, {push:false}); }
+})();
+</script>
+

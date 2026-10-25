@@ -1,0 +1,158 @@
+=== safe-word-engine.ts — part 14 of 19. Join all parts in order to get the full file. ===
+
+function shell(cfg: SiteConfig, p: { url: string; title: string; desc: string; h1: string; crumbs: { name: string; url: string }[]; content: string; jsonLd: object[]; ogImage?: string }): string {
+  const og = cfg.baseUrl + (p.ogImage ?? cfg.ogImage);
+  const crumbLd = {
+    "@context": "https://schema.org", "@type": "BreadcrumbList",
+    itemListElement: p.crumbs.map((c, i) => ({ "@type": "ListItem", position: i + 1, name: c.name, item: c.url })),
+  };
+  return `<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(p.title)}</title>
+<meta name="description" content="${esc(p.desc)}">
+<meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
+<link rel="canonical" href="${p.url}">
+<link rel="alternate" hreflang="en-AU" href="${p.url}">
+<link rel="alternate" hreflang="x-default" href="${p.url}">
+<meta name="theme-color" content="#0b5fff">
+<meta property="og:site_name" content="${esc(cfg.brand)}">
+<meta property="og:locale" content="en_AU">
+<meta property="og:type" content="article">
+<meta property="og:title" content="${esc(p.title)}">
+<meta property="og:description" content="${esc(p.desc)}">
+<meta property="og:url" content="${p.url}">
+<meta property="og:image" content="${og}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>${CSS}</style>
+${[...p.jsonLd, crumbLd].map((o) => `<script type="application/ld+json">${JSON.stringify(o)}</script>`).join("\n")}
+</head>
+<body>
+<div class="tape" aria-hidden="true"></div>
+<header><a href="/" style="font-weight:700;text-decoration:none;color:inherit">${esc(cfg.brand)}</a></header>
+<main>
+<nav class="crumbs" aria-label="Breadcrumb">${p.crumbs.map((c, i) => (i < p.crumbs.length - 1 ? `<a href="${c.url}">${esc(c.name)}</a> › ` : esc(c.name))).join("")}</nav>
+<h1>${esc(p.h1)}</h1>
+${p.content}
+</main>
+<div class="tape" aria-hidden="true"></div>
+<footer><small>${esc(cfg.brand)} SWMS are not a certification of compliance. The business doing the work remains responsible for checking the SWMS against the site, consulting workers, putting the controls in place and monitoring them.</small></footer>
+</body>
+</html>
+`;
+}
+
+function webPageLd(cfg: SiteConfig, url: string, name: string, desc: string, reviewedAt: string) {
+  return {
+    "@context": "https://schema.org", "@type": "WebPage", url, name, description: desc, inLanguage: "en-AU",
+    isPartOf: { "@type": "WebSite", name: cfg.brand, url: cfg.baseUrl },
+    reviewedBy: { "@type": "Person", name: cfg.reviewer.name, hasCredential: { "@type": "EducationalOccupationalCredential", name: cfg.reviewer.credential } },
+    lastReviewed: reviewedAt, dateModified: reviewedAt,
+    publisher: { "@type": "Organization", name: cfg.brand, url: cfg.baseUrl },
+  };
+}
+
+const faqLd = (faq: { q: string; a: string }[]) => ({
+  "@context": "https://schema.org", "@type": "FAQPage",
+  mainEntity: faq.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
+});
+
+const reviewedLine = (cfg: SiteConfig, date: string) =>
+  `<p class="reviewed">Content reviewed by ${esc(cfg.reviewer.name)}, ${esc(cfg.reviewer.credential)}. Last reviewed ${date}.</p>`;
+
+const LEVEL_LABEL: Record<string, string> = {
+  elimination: "Eliminate", substitution: "Substitute", isolation: "Isolate", engineering: "Engineering", administrative: "Admin", ppe: "PPE",
+};
+
+export function buildSite(library: Module[], cfg: SiteConfig = SITE_DEFAULTS): Page[] {
+  const reviewed = library.filter((m) => isPublishable(m) && m.hrcwCategoryId && m.seoSummary && wordCount(m.seoSummary) >= 120);
+  const liveActs = HRCW_CATEGORIES.filter((c) => ACTIVITY_SEO[c.id] && reviewed.some((m) => m.hrcwCategoryId === c.id));
+  const liveTrades = TRADES.filter((t) => t.reviewed);
+  const actUrl = (id: string) => `${cfg.baseUrl}/swms/${ACTIVITY_SEO[id].slug}/`;
+  const tradeUrl = (t: TradeContent) => `${cfg.baseUrl}/swms-for/${t.slug}/`;
+  const hubUrl = `${cfg.baseUrl}/swms/`;
+  const isLive = (id: string) => liveActs.some((c) => c.id === id);
+  const pages: Page[] = [];
+  const today = new Date().toISOString().slice(0, 10);
+
+  // ---- Hub ----
+  {
+    const title = `SWMS: Site-Specific Safe Work Method Statements | ${cfg.brand}`;
+    const desc = "What a SWMS is, when you need one, and the 18 high-risk construction activities. Speak the job, get a site-specific SWMS your crew signs on their phones.";
+    const faq = [
+      { q: "What is a SWMS?", a: "A Safe Work Method Statement sets out the high-risk construction work being done, the hazards and risks it creates, and how those risks will be controlled, monitored and reviewed." },
+      { q: "When is a SWMS legally required?", a: "Before any of the 18 high-risk construction work activities in the model WHS Regulations starts. Victoria uses its own list of 19 activities under its OHS Regulations." },
+      ...FAQ_ACTIVITY("high-risk construction").slice(1),
+    ];
+    const content = `<p class="lede">A SWMS has to match the job in front of the crew. ${esc(cfg.brand)} turns a spoken job brief into a site-specific SWMS in minutes, on our template or your own paperwork, then gets everyone signed on their phones.</p>
+<p><a class="cta" href="${cfg.checkPath}">Run a free SWMS Check</a></p>
+<h2>What a SWMS must cover</h2>
+<p>A SWMS identifies the high-risk construction work being done, the hazards and risks to health and safety that come with it, and the measures that will control those risks. It also sets out how the controls will be put in place, monitored and reviewed. It has to be prepared before the work starts, in consultation with the workers doing it, and kept where they can get to it until the work is finished.</p>
+<h2>The 18 high-risk construction work activities</h2>
+<p>Under the model WHS Regulations a SWMS is required for these activities. One SWMS can cover several of them on the same job. Victoria has its own list of 19.</p>
+<ul class="grid">${HRCW_CATEGORIES.map((c) => `<li>${isLive(c.id) ? `<a href="${actUrl(c.id)}">${esc(c.title)}</a>` : esc(c.title)}</li>`).join("")}</ul>
+${liveTrades.length ? `<h2>SWMS by trade</h2><ul class="grid">${liveTrades.map((t) => `<li><a href="${tradeUrl(t)}">SWMS for ${esc(t.plural.toLowerCase())}</a></li>`).join("")}</ul>` : ""}
+<h2>How ${esc(cfg.brand)} builds your SWMS</h2>
+<div class="card"><strong>1. Say the job.</strong> Task, site, gear and crew in your own words. We ask for anything missing, out loud.</div>
+<div class="card"><strong>2. Check the draft.</strong> Hazards and controls come only from reviewed content. Anything not covered is flagged for you to add.</div>
+<div class="card"><strong>3. Sign and send.</strong> Each person signs with their own saved signature. Email, print or save the PDF, and every copy is logged.</div>
+<div class="tape thin" aria-hidden="true"></div>
+<h2>Common questions</h2>
+${faq.map((f) => `<h3>${esc(f.q)}</h3><p>${esc(f.a)}</p>`).join("\n")}
+${reviewedLine(cfg, today)}`;
+    pages.push({
+      path: "swms/index.html", url: hubUrl, type: "hub",
+      body: shell(cfg, {
+        url: hubUrl, title, desc, h1: "Site-specific SWMS, built from what you say on site",
+        crumbs: [{ name: cfg.brand, url: cfg.baseUrl + "/" }, { name: "SWMS", url: hubUrl }], content,
+        jsonLd: [
+          webPageLd(cfg, hubUrl, title, desc, today),
+          faqLd(faq),
+          { "@context": "https://schema.org", "@type": "SoftwareApplication", name: cfg.brand, applicationCategory: "BusinessApplication", operatingSystem: "iOS, Android, Web", description: desc, url: cfg.baseUrl },
+          { "@context": "https://schema.org", "@type": "Organization", name: cfg.brand, url: cfg.baseUrl, logo: `${cfg.baseUrl}/apple-touch-icon.png` },
+        ],
+      }),
+    });
+  }
+
+  // ---- Activity pages ----
+  for (const c of liveActs) {
+    const s = ACTIVITY_SEO[c.id];
+    const mods = reviewed.filter((m) => m.hrcwCategoryId === c.id);
+    const lastReviewed = mods.map((m) => m.reviewedAt!).sort().pop()!;
+    const url = actUrl(c.id);
+    const title = clip(`${s.name} SWMS | Site-Specific in Minutes | ${cfg.brand}`, 60);
+    const desc = clip(`${s.name} SWMS for Australian tradies. Say the job and get a site-specific SWMS from reviewed WHS content, signed by your crew on their phones.`, 158);
+    const faq = FAQ_ACTIVITY(s.name);
+    const hazards = mods.flatMap((m) => m.hazards);
+    const trades = liveTrades.filter((t) => t.activities.includes(c.id));
+    const related = liveActs.filter((o) => o.id !== c.id).slice(0, 6);
+    const content = `<p class="lede">Jobs that involve ${esc(s.plain ?? c.title.toLowerCase())} are high-risk construction work, so a SWMS has to be in place before work starts. Here's what it needs to cover, and how ${esc(cfg.brand)} builds one for your actual site.</p>
+<p><a class="cta" href="${cfg.checkPath}">Run a free SWMS Check</a></p>
+<h2>About ${esc(s.name.toLowerCase())} work</h2>
+${mods.map((m) => m.seoSummary!.split(/\n{2,}/).map((para) => `<p>${esc(para.trim())}</p>`).join("\n")).join("\n")}
+<h2>Hazards a ${esc(s.name.toLowerCase())} SWMS needs to address</h2>
+${hazards.map((h) => `<div class="card"><h3>${esc(h.description)}</h3><p>${esc(h.risk)}</p><ul>${h.controls.map((ct) => `<li><strong>${LEVEL_LABEL[ct.level]}:</strong> ${esc(ct.text)}</li>`).join("")}</ul></div>`).join("\n")}
+<p>Controls are listed most effective first, following the hierarchy of control. Your SWMS will reflect the conditions on your site, and anything our reviewed content doesn't cover is flagged for you to add before the crew signs.</p>
+<div class="tape thin" aria-hidden="true"></div>
+<h2>Common questions</h2>
+${faq.map((f) => `<h3>${esc(f.q)}</h3><p>${esc(f.a)}</p>`).join("\n")}
+${trades.length ? `<h2>Trades that often need this SWMS</h2><ul class="grid">${trades.map((t) => `<li><a href="${tradeUrl(t)}">${esc(t.plural)}</a></li>`).join("")}</ul>` : ""}
+${related.length ? `<h2>Other high-risk work</h2><ul class="grid">${related.map((o) => `<li><a href="${actUrl(o.id)}">${esc(ACTIVITY_SEO[o.id].name)} SWMS</a></li>`).join("")}</ul>` : ""}
+<p><a href="${hubUrl}">All about SWMS and the 18 high-risk activities</a></p>
+${reviewedLine(cfg, lastReviewed)}`;
+    pages.push({
+      path: `swms/${s.slug}/index.html`, url, type: "activity",
+      body: shell(cfg, {
+        url, title, desc, h1: `${s.name} SWMS`,
+        crumbs: [{ name: cfg.brand, url: cfg.baseUrl + "/" }, { name: "SWMS", url: hubUrl }, { name: `${s.name} SWMS`, url }],
+        content, jsonLd: [webPageLd(cfg, url, title, desc, lastReviewed), faqLd(faq)],
+      }),
+    });
+  }
